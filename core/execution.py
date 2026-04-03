@@ -1,10 +1,12 @@
 
 from datetime import datetime, timezone
 from queue import Queue
+import numpy as np
 
 from abc import ABC, abstractmethod
 
 from .event import FillEvent, OrderEvent
+from models.slippage import LogSlippageModel
 
 
 
@@ -46,19 +48,21 @@ class SimulatedExecutionHandler(ExecutionHandler):
         self.events = events
         self.data_handler = data_handler
         self.pending_orders = Queue()
+        self.slippage_model = LogSlippageModel()
 
         self.verbose = verbose
 
-    def calc_fill_cost(self, ticker, quantity):
+    def calc_fill_cost(self, ticker, quantity, direction):
         bars = self.data_handler.get_latest_bars(ticker, N=1)
         if bars is None:
             return
         
         open = bars[0][2]
-        fill_price = open
         dt = bars[0][1]
         fill_quantity = quantity
 
+        fill_price = self.slippage_model.calculate(open, quantity, direction)
+        if self.verbose: print(f"EXEC | Open: {open} | Fill price: {fill_price} | Slippage: {fill_price - open}")
         fill_cost = fill_price * fill_quantity
 
         return dt, fill_price, fill_cost
@@ -89,13 +93,6 @@ class SimulatedExecutionHandler(ExecutionHandler):
         if event.type == 'ORDER':
             self.pending_orders.put(event)
 
-
-
-
-
-
-
-
     def execute_order(self):
         """
         Converts Order objects into Fill objects.
@@ -108,7 +105,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
                 event = self.pending_orders.get(False)
                 if self.verbose: print(f"EXEC: {event.ticker} order taken from new FIFO queue, executing...")
 
-                result = self.calc_fill_cost(event.ticker, event.quantity)
+                result = self.calc_fill_cost(event.ticker, event.quantity, event.direction)
 
                 if result != None:
                     current_datetime, fill_price, fill_cost = result

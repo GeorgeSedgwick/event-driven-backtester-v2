@@ -10,7 +10,7 @@ __pycache__/
 
 # Environment
 .env
-
+ed_venv/
 
 # Logs
 *.log
