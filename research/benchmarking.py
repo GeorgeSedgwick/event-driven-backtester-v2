@@ -31,7 +31,9 @@ def compare_to_benchmark():
         end_date=end_date,
         initial_capital=100000,
         lookback=None,
-        use_shorts=False
+        rebalance=None,
+        use_shorts=False,
+        track_dates=True
         )
 
     strategy_port = run_backtest(
@@ -41,7 +43,9 @@ def compare_to_benchmark():
         end_date=end_date,
         initial_capital=100000,
         lookback=252,
-        use_shorts=True
+        rebalance=21,
+        use_shorts=False,
+        track_dates=True
         )
     
     # INITIAL TEST DATES:
@@ -72,7 +76,6 @@ def compare_to_benchmark():
     print(f"Max drawdown: {stats['max_drawdown']:.2f}%")
     print(f"Drawdown duration: {stats['drawdown_duration']:.2f}")
 
-
 # ======= PLOT EQUITY CURVES =========
     strat_dfs = {"Buy and Hold": bnh_port.equity_curve, f"{strategy_title}": strategy_port.equity_curve}
     fig = go.Figure()
@@ -86,7 +89,7 @@ def compare_to_benchmark():
     fig.update_xaxes(title_text="Time")
     fig.update_yaxes(title_text="Portfolio Value")
 
-    fig.show()
+    #fig.show()
 
 # ======= PLOT PRICE CHART ========
 
@@ -96,15 +99,15 @@ def compare_to_benchmark():
 
     trades, wins, losses, breakeven = strategy_port.get_trade_points()
     
-    df = pd.DataFrame(trades)
-    print(f"\n\n========= ALL TRADES =========")
-    print(df.to_string())
-    print(f"Trade count: {len(trades)}")
+    #df = pd.DataFrame(trades)
+    #print(f"\n\n========= ALL TRADES =========")
+    #print(df.to_string())
+    #print(f"Trade count: {len(trades)}")
     
-    pf.display_win_ratio(wins, losses)
-    pf.display_payoff_ratio(trades)
+    #pf.display_win_ratio(wins, losses)
+    #pf.display_payoff_ratio(trades)
     #pf.create_price_chart(asset, dates, prices, trades) 
 
-    print(f"TOTAL COMMISSION PAYED ON STRATEGY: {strategy_port.current_holdings['commission']}")
+    print(f"Total Commission: {strategy_port.current_holdings['commission']}")
 
 

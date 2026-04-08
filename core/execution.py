@@ -49,6 +49,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
         self.data_handler = data_handler
         self.pending_orders = Queue()
         self.slippage_model = LogSlippageModel()
+        self.total_slippage = 0
 
         self.verbose = verbose
 
@@ -62,8 +63,14 @@ class SimulatedExecutionHandler(ExecutionHandler):
         fill_quantity = quantity
 
         fill_price = self.slippage_model.calculate(open, quantity, direction)
+        
         if self.verbose: print(f"EXEC | Open: {open} | Fill price: {fill_price} | Slippage: {fill_price - open}")
+        
+        slippage_cost = abs(fill_price - open) * fill_quantity
+        self.total_slippage += slippage_cost
+
         fill_cost = fill_price * fill_quantity
+
 
         return dt, fill_price, fill_cost
 

@@ -129,3 +129,20 @@ def display_payoff_ratio(trades):
         payoff_ratio = float('inf')
     
     print(f"Avg Win / Avg Loss: {payoff_ratio:.2f}")
+
+
+def display_walkforward_curve(combined_equity_curve):
+    """
+    Reveives a combined equity curve (Pandas Series) and creates a graph.
+    """
+    fig = go.Figure()
+    fig = fig.add_trace(go.Scatter(x=combined_equity_curve.index,
+                                    y=combined_equity_curve,
+                                    name=f""))
+    
+    fig.update_layout(title_text=f"S&P 500 Universe 2018 - 2026 | Combined equity curve")
+    fig.update_layout(legend_title="Strategy")
+    fig.update_xaxes(title_text="Time")
+    fig.update_yaxes(title_text="Portfolio Value")
+
+    fig.show()

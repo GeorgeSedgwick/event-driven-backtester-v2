@@ -5,13 +5,13 @@ from core.event import SignalEvent
 from .base import Strategy
 
 class MomentumStrategy(Strategy):
-    def __init__(self, bars, events, lookback=252, use_shorts=False, verbose=False):
+    def __init__(self, bars, events, lookback=252, rebalance=0, use_shorts=False, verbose=False):
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
         self.events = events
         self.entry_bar = {s: None for s in self.ticker_list}
         self.lookback_period = lookback
-        self.rebalance_period = 21
+        self.rebalance_period = rebalance
         self.days_since_rebalance = 0
         self.short_period, self.med_period = 30, 75
         self.use_shorts = use_shorts

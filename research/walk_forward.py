@@ -3,6 +3,10 @@ from datetime import datetime, timezone
 from core.engine import run_backtest
 from strategies import MomentumStrategy
 from utils.data_fetch import get_snp500_tickers, get_valid_tickers
+import plotly.graph_objects as go
+from research import performance as pf
+pd.options.display.max_rows
+
 
 """
 
@@ -14,7 +18,6 @@ from utils.data_fetch import get_snp500_tickers, get_valid_tickers
     D -> Test
 
 """
-
 
 def evaluate_lookbacks(strategy, tickers, start, end, lookback_values, initial_capital):
    
@@ -31,7 +34,9 @@ def evaluate_lookbacks(strategy, tickers, start, end, lookback_values, initial_c
             end_date=end,
             initial_capital=initial_capital,
             lookback=lb,
-            use_shorts=False
+            rebalance=21,
+            use_shorts=False,
+            track_dates=False
         )
 
         stats = port.output_summary_stats()
@@ -48,10 +53,10 @@ def evaluate_lookbacks(strategy, tickers, start, end, lookback_values, initial_c
     return best_lookback, best_sharpe, results
 
 
-period_A_start, period_A_end = datetime(2020, 1, 1, tzinfo=timezone.utc), datetime(2021, 1, 1, tzinfo=timezone.utc)
-period_B_start, period_B_end = datetime(2021, 1, 1, tzinfo=timezone.utc), datetime(2022, 1, 1, tzinfo=timezone.utc)
-period_C_start, period_C_end = datetime(2022, 1, 1, tzinfo=timezone.utc), datetime(2023, 1, 1, tzinfo=timezone.utc)
-period_D_start, period_D_end = datetime(2023, 1, 1, tzinfo=timezone.utc), datetime(2024, 1, 1, tzinfo=timezone.utc)
+period_A_start, period_A_end = datetime(2018, 1, 1, tzinfo=timezone.utc), datetime(2020, 1, 1, tzinfo=timezone.utc)
+period_B_start, period_B_end = datetime(2020, 1, 1, tzinfo=timezone.utc), datetime(2022, 1, 1, tzinfo=timezone.utc)
+period_C_start, period_C_end = datetime(2022, 1, 1, tzinfo=timezone.utc), datetime(2024, 1, 1, tzinfo=timezone.utc)
+period_D_start, period_D_end = datetime(2024, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 periods = [
     ("A", period_A_start, period_A_end),
@@ -61,27 +66,26 @@ periods = [
 ]
 
 def run_walk_forward():
-    lookback_values = [20, 63, 126, 252, 378]
+    base_curves = []
+    lookback_values = [126, 252, 378]
     initial_capital = 100000
 
     strategy = MomentumStrategy
     tickers = get_snp500_tickers()
     csv_dir = '/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents'
-
+    train_name = "TRAIN A"
     print("\n===== START WALK FORWARD =====")
-
     for i in range(1, len(periods)):
-        train_name = periods[i - 1][0]
-        train_start = periods[0][1]
+        train_start = periods[i-1][1]
         train_end = periods[i - 1][2]
 
         test_name = periods[i][0]
         test_start = periods[i][1]
         test_end = periods[i][2]
 
+        print(f"\n======= {train_name} ========")
+        print(f"Train start: {train_start} | Train end: {train_end}")
 
-        
-        print(f"\n======= TRAIN A -> {train_name} ========")
         # Begin training, get valid tickers for train period
         train_tickers = get_valid_tickers(
             tickers,
@@ -99,10 +103,17 @@ def run_walk_forward():
             initial_capital
         )
 
+
+        train_name = " + ".join([train_name, str(periods[i][0])])
+
+
         print(f"Best lookback: {best_lookback} | Train Sharpe: {best_sharpe:.2f}")
 
 
+
+
         print(f"\n====== TEST {test_name} ======")
+        print(f"Test start: {test_start} | Test end: {test_end}")
         # Begin testing, get valid tickers for test period
         test_tickers = get_valid_tickers(
             tickers,
@@ -118,9 +129,37 @@ def run_walk_forward():
             end_date=test_end,
             initial_capital=initial_capital,
             lookback=best_lookback,
-            use_shorts=False
+            rebalance=21,
+            use_shorts=False,
+            track_dates=False
         )
 
         test_stats = test_port.output_summary_stats()
         test_sharpe = test_stats['sharpe']
         print(f"Test Sharpe: {test_sharpe:.2f}")
+
+        test_port.create_equity_curve_dataframe()
+
+    
+        base_curves.append(test_port.equity_curve["equity_curve"])
+
+    adj_curves = []
+    multiplier = float(0)
+    for i in range(len(base_curves)):
+
+        if i == 0:
+            adj_curves.append(base_curves[i])
+            multiplier = base_curves[i].iloc[-1]
+            continue
+        else:
+            temp = base_curves[i] * multiplier
+            adj_curves.append(temp)
+            multiplier = temp.iloc[-1]
+
+
+
+    comb_eq = pd.concat(adj_curves).sort_index()
+
+    pf.display_walkforward_curve(comb_eq)
+
+    

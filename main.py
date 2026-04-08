@@ -5,7 +5,7 @@ from research.benchmarking import compare_to_benchmark
 
 
 if __name__ == "__main__":
-    MODE = "benchmark" # "walkforward" | "benchmark"
+    MODE = "walkforward" # "walkforward" | "benchmark"
     
     if MODE == "walkforward":
         run_walk_forward()
