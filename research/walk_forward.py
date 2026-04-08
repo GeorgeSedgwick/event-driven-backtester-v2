@@ -6,6 +6,7 @@ from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 import plotly.graph_objects as go
 from research import performance as pf
 pd.options.display.max_rows
+import itertools
 
 
 """
@@ -19,38 +20,38 @@ pd.options.display.max_rows
 
 """
 
-def evaluate_lookbacks(strategy, tickers, start, end, lookback_values, initial_capital):
-   
-    results = {}
+def evaluate_parameters(strategy, tickers, start, end, param_grid, initial_capital):
 
     best_sharpe = None
-    best_lookback = None
+    best_params = None
 
-    for lb in lookback_values:
+    keys = list(param_grid.keys())
+    combinations = list(itertools.product(*param_grid.values()))
+
+    for comb in combinations:
+        params = dict(zip(keys, comb))
+
         port = run_backtest(
             strategy,
             tickers,
             start_date=start,
             end_date=end,
             initial_capital=initial_capital,
-            lookback=lb,
-            rebalance=21,
+            lookback=params.get('rebalance', 252),
+            rebalance=params.get('rebalance', 21),
             use_shorts=False,
             track_dates=False
         )
 
         stats = port.output_summary_stats()
         sharpe = stats['sharpe']
-
-        results[lb] = port
-
-        print(f"Lookback: {lb} | Sharpe: {sharpe:.2f}")
+        print(f"Params {params} | Sharpe: {sharpe:.2f}")
 
         if best_sharpe is None or sharpe > best_sharpe:
             best_sharpe = sharpe
-            best_lookback = lb
+            best_params = params
 
-    return best_lookback, best_sharpe, results
+    return best_params, best_sharpe
 
 
 period_A_start, period_A_end = datetime(2018, 1, 1, tzinfo=timezone.utc), datetime(2020, 1, 1, tzinfo=timezone.utc)
@@ -67,13 +68,18 @@ periods = [
 
 def run_walk_forward():
     base_curves = []
-    lookback_values = [126, 252, 378]
-    initial_capital = 100000
 
+    param_grid = {
+        'lookback': [252],
+        'rebalance': [5, 21, 36, 48]
+    }
+
+    initial_capital = 100000
     strategy = MomentumStrategy
     tickers = get_snp500_tickers()
     csv_dir = '/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents'
     train_name = "TRAIN A"
+
     print("\n===== START WALK FORWARD =====")
     for i in range(1, len(periods)):
         train_start = periods[i-1][1]
@@ -94,12 +100,12 @@ def run_walk_forward():
             end_date=train_end
         )
 
-        best_lookback, best_sharpe, _ = evaluate_lookbacks(
+        best_params, best_sharpe= evaluate_parameters(
             strategy,
             train_tickers,
             train_start,
             train_end,
-            lookback_values,
+            param_grid,
             initial_capital
         )
 
@@ -107,7 +113,7 @@ def run_walk_forward():
         train_name = " + ".join([train_name, str(periods[i][0])])
 
 
-        print(f"Best lookback: {best_lookback} | Train Sharpe: {best_sharpe:.2f}")
+        print(f"Best Params: {best_params} | Train Sharpe: {best_sharpe:.2f}")
 
 
 
@@ -128,8 +134,8 @@ def run_walk_forward():
             start_date=test_start,
             end_date=test_end,
             initial_capital=initial_capital,
-            lookback=best_lookback,
-            rebalance=21,
+            lookback=best_params['lookback'],
+            rebalance=best_params['rebalance'],
             use_shorts=False,
             track_dates=False
         )
