@@ -9,12 +9,12 @@ from core.execution import SimulatedExecutionHandler
 
 
 
-def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, lookback, rebalance ,use_shorts, track_dates):
+def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, lookback, rebalance, top_n ,use_shorts, track_dates):
     events = Queue()
 
     bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
 
-    strategy = strategy_name(bars, events, lookback=lookback, rebalance=rebalance,use_shorts=use_shorts, verbose=False)
+    strategy = strategy_name(bars, events, lookback=lookback, rebalance=rebalance, top_n=top_n, use_shorts=use_shorts, verbose=False)
 
     port = NaivePortfolio(bars, events, start_date, initial_capital, verbose=False)
     
@@ -23,6 +23,7 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     while True:
         if bars.continue_backtest:
             bars.update_bars()
+            
         else:
             break
 

@@ -49,7 +49,6 @@ class SimulatedExecutionHandler(ExecutionHandler):
         self.data_handler = data_handler
         self.pending_orders = Queue()
         self.slippage_model = LogSlippageModel()
-        self.total_slippage = 0
 
         self.verbose = verbose
 
@@ -58,8 +57,8 @@ class SimulatedExecutionHandler(ExecutionHandler):
         if bars is None:
             return
         
-        open = bars[0][2]
-        dt = bars[0][1]
+        open = bars[0].open
+        dt = bars[0].datetime
         fill_quantity = quantity
 
         fill_price = self.slippage_model.calculate(open, quantity, direction)
@@ -67,12 +66,10 @@ class SimulatedExecutionHandler(ExecutionHandler):
         if self.verbose: print(f"EXEC | Open: {open} | Fill price: {fill_price} | Slippage: {fill_price - open}")
         
         slippage_cost = abs(fill_price - open) * fill_quantity
-        self.total_slippage += slippage_cost
-
         fill_cost = fill_price * fill_quantity
 
 
-        return dt, fill_price, fill_cost
+        return dt, fill_price, fill_cost, slippage_cost
 
     
     def calculate_ib_commission(self, fill_cost):
@@ -115,7 +112,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
                 result = self.calc_fill_cost(event.ticker, event.quantity, event.direction)
 
                 if result != None:
-                    current_datetime, fill_price, fill_cost = result
+                    current_datetime, fill_price, fill_cost, slippage_cost = result
 
                 commission = self.calculate_ib_commission(fill_cost)
 
@@ -128,7 +125,8 @@ class SimulatedExecutionHandler(ExecutionHandler):
                         event.direction,
                         fill_price,
                         fill_cost, 
-                        commission
+                        commission,
+                        slippage_cost,
                     )
 
                     self.events.put(fill_event)

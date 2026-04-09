@@ -84,7 +84,7 @@ class FillEvent(Event):
     an instrument actually filled an at what price. In addition, stores  the commission of the trade from the brokerage.
     """
 
-    def __init__(self, timeindex, ticker, exchange, quantity, direction, fill_price, fill_cost, commission):
+    def __init__(self, timeindex, ticker, exchange, quantity, direction, fill_price, fill_cost, commission, slippage):
         """
         Initialises the FillEvent object, sets the symbol, exchange, quantity, direction, cost of  fill and an optimal commission
         
@@ -101,6 +101,7 @@ class FillEvent(Event):
         self.fill_price = fill_price
         self.fill_cost = fill_cost
         self.commission = commission
+        self.slippage = slippage
         
 
 

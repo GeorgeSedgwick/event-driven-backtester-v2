@@ -32,8 +32,9 @@ def compare_to_benchmark():
         initial_capital=100000,
         lookback=None,
         rebalance=None,
+        top_n=None,
         use_shorts=False,
-        track_dates=True
+        track_dates=False
         )
 
     strategy_port = run_backtest(
@@ -42,10 +43,11 @@ def compare_to_benchmark():
         start_date=start_date,
         end_date=end_date,
         initial_capital=100000,
-        lookback=252,
+        lookback=126,
         rebalance=21,
+        top_n=5,
         use_shorts=False,
-        track_dates=True
+        track_dates=False
         )
     
     # INITIAL TEST DATES:
@@ -108,6 +110,8 @@ def compare_to_benchmark():
     #pf.display_payoff_ratio(trades)
     #pf.create_price_chart(asset, dates, prices, trades) 
 
-    print(f"Total Commission: {strategy_port.current_holdings['commission']}")
+    print(f"Total Commission: ${strategy_port.current_holdings['commission']:.2f}")
+    print(f"Total Slippage: ${strategy_port.current_holdings['slippage']:.2f}")
+
 
 

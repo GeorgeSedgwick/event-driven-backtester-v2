@@ -11,7 +11,7 @@ class BuyAndHoldStrategy(Strategy):
    testing mechanism for the strategy class, goes long and will never exit a position
     """
 
-    def __init__(self, bars, events, lookback=None, rebalance=None,use_shorts=False, verbose=False):
+    def __init__(self, bars, events, lookback=None, rebalance=None, top_n=None, use_shorts=False, verbose=False):
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
         self.events = events
@@ -33,8 +33,8 @@ class BuyAndHoldStrategy(Strategy):
                 if bars is None or bars == []:
                     continue
             
-                dt = bars[0][1]
-                close = bars[0][4]
+                dt = bars[0].datetime
+                close = bars[0].close
 
                 signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=False, price=close)
                 self.events.put(signal) # Append the Queue() object with the Signal

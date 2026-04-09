@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import math
+import sqlite3
 
 def create_sharpe_ratio(returns, periods=252):
     """
@@ -146,3 +147,10 @@ def display_walkforward_curve(combined_equity_curve):
     fig.update_yaxes(title_text="Portfolio Value")
 
     fig.show()
+
+
+
+def create_sql_database():
+    con = sqlite3.connect("tutorial.db")
+
+    pass

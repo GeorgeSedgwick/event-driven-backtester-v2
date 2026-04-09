@@ -97,6 +97,7 @@ class NaivePortfolio(Portfolio):
         d = dict( (k,v) for k, v in [(s, 0.0) for s in self.ticker_list] )
         d['cash'] = self.initial_capital
         d['commission'] = 0.0 # Cumulative accrued
+        d['slippage'] = 0.0
         d['total'] = self.initial_capital
         return [d]
     
@@ -111,51 +112,58 @@ class NaivePortfolio(Portfolio):
         d = dict( (k,v) for k, v in [(s, 0.0) for s in self.ticker_list] )
         d['cash'] = self.initial_capital
         d['commission'] = 0.0
+        d['slippage'] = 0.0
         d['total'] = self.initial_capital
         #print(f"Dict1 total = {d['total']}") # Just 100,000 (inital capital)
         return d
     
 
     def update_timeindex(self, event):
-        # Obtains latest prices
-        # Create a new dictionary of tickers - Current positions.
-        # Only updates after a FillEvent
-        # Append all_positions (list) with the current positions,
-        # Repeated for holdings, except market value (at close (for now...))
-        # Append all_holdings with these.
+        """
+        - Creates a dictionary bars{}
+        - Store a copy of each tickers latest bar as bars[ticker]
+        - Creates a snapshot of all current positions and adds to all_positions at latest datetime available
+        - Creates a holdings snapshot of all current holdings... ''
+        - Updates current_holdings with the latest market values available
 
+        """
+
+    
         bars = {}
         for ticker in self.ticker_list:
             bars[ticker] = self.bars.get_latest_bars(ticker, N=1)
 
-        # Update positions
-        dp = dict( (k,v) for k, v in [(s, 0) for s in self.ticker_list] )
-        dp['datetime'] = bars[self.ticker_list[0]][0][1]
 
-        for s in self.ticker_list:
-            dp[s] = self.current_positions[s]
+        positions_snapshot = dict.fromkeys(self.ticker_list, 0)
+        positions_snapshot['datetime'] = bars[self.ticker_list[0]][0].datetime
 
-        self.all_positions.append(dp)
+        for ticker in self.ticker_list:
+            positions_snapshot[ticker] = self.current_positions[ticker]
 
-        dh = dict( (k,v) for k, v in [(s, 0) for s in self.ticker_list] )
-        dh['datetime'] = bars[self.ticker_list[0]][0][1]
-        dh['cash'] = self.current_holdings['cash']
-        dh['commission'] = self.current_holdings['commission']
-        dh['total'] = self.current_holdings['cash']
+        self.all_positions.append(positions_snapshot)
 
-        for s in self.ticker_list:
-            bars_s = bars[s]
 
-            if bars_s is None or len(bars_s) == 0:
+        holdings_snapshot = dict.fromkeys(self.ticker_list, 0)
+        holdings_snapshot['datetime'] = bars[self.ticker_list[0]][0].datetime
+        holdings_snapshot['cash'] = self.current_holdings['cash']
+        holdings_snapshot['commission'] = self.current_holdings['commission']
+        holdings_snapshot['slippage'] = self.current_holdings['slippage']
+        holdings_snapshot['total'] = self.current_holdings['cash']
+
+        for ticker in self.ticker_list:
+            ticker_bar = bars[ticker]
+
+            if ticker_bar is None or len(ticker_bar) == 0:
                 continue
 
-            market_value = self.current_positions[s] * bars_s[0][4]
-            dh[s] = market_value
-            dh['total'] += market_value
-
-        self.current_holdings['total'] = dh['total']
-        self.all_holdings.append(dh)
+            market_value = self.current_positions[ticker] * ticker_bar[0].close
+            holdings_snapshot[ticker] = market_value
+            holdings_snapshot['total'] += market_value
         
+        self.current_holdings['total'] = holdings_snapshot['total']
+        self.all_holdings.append(holdings_snapshot)
+
+            
 
 
     def update_positions_from_fill(self, fill):
@@ -196,6 +204,7 @@ class NaivePortfolio(Portfolio):
 
         if self.verbose: print(f"FILL {fill.ticker}: fill_cost {fill.fill_cost:.2f}")
         
+        self.current_holdings['slippage'] += fill.slippage
         self.current_holdings['commission'] += fill.commission
         self.current_holdings['cash'] -= fill.fill_cost * fill_dir
         self.current_holdings['cash'] -= fill.commission
@@ -287,7 +296,7 @@ class NaivePortfolio(Portfolio):
 
     def calc_max_shares(self, ticker):
         bars = self.bars.get_latest_bars(ticker, N=1)
-        close_price = bars[0][4]
+        close_price = bars[0].close
         order_size = int(self.current_holdings['cash'] // close_price)
         return order_size
 

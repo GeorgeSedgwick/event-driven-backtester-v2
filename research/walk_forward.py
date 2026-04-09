@@ -20,7 +20,7 @@ import itertools
 
 """
 
-def evaluate_parameters(strategy, tickers, start, end, param_grid, initial_capital):
+def evaluate_parameters(strategy, tickers, start, end, param_grid, initial_capital, use_shorts):
 
     best_sharpe = None
     best_params = None
@@ -39,7 +39,8 @@ def evaluate_parameters(strategy, tickers, start, end, param_grid, initial_capit
             initial_capital=initial_capital,
             lookback=params.get('rebalance', 252),
             rebalance=params.get('rebalance', 21),
-            use_shorts=False,
+            top_n=params.get('top_n', 5),
+            use_shorts=use_shorts,
             track_dates=False
         )
 
@@ -67,21 +68,26 @@ periods = [
 ]
 
 def run_walk_forward():
+
     base_curves = []
 
     param_grid = {
-        'lookback': [252],
-        'rebalance': [5, 21, 36, 48]
+        'lookback': [126],
+        'rebalance': [21, 36, 48],
+        'top_n': [5, 10, 15]
     }
+    
 
     initial_capital = 100000
+    use_shorts = False
+    
     strategy = MomentumStrategy
     tickers = get_snp500_tickers()
     csv_dir = '/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents'
-    train_name = "TRAIN A"
 
-    print("\n===== START WALK FORWARD =====")
+    print("\n===== START WALK FORWARD w/o Shorts =====")
     for i in range(1, len(periods)):
+        train_name = periods[i-1][0]
         train_start = periods[i-1][1]
         train_end = periods[i - 1][2]
 
@@ -89,7 +95,7 @@ def run_walk_forward():
         test_start = periods[i][1]
         test_end = periods[i][2]
 
-        print(f"\n======= {train_name} ========")
+        print(f"\n======= TRAINING ON {train_name} ========")
         print(f"Train start: {train_start} | Train end: {train_end}")
 
         # Begin training, get valid tickers for train period
@@ -106,7 +112,8 @@ def run_walk_forward():
             train_start,
             train_end,
             param_grid,
-            initial_capital
+            initial_capital,
+            use_shorts=use_shorts
         )
 
 
@@ -118,7 +125,7 @@ def run_walk_forward():
 
 
 
-        print(f"\n====== TEST {test_name} ======")
+        print(f"\n====== TESTING ON {test_name} ======")
         print(f"Test start: {test_start} | Test end: {test_end}")
         # Begin testing, get valid tickers for test period
         test_tickers = get_valid_tickers(
@@ -136,7 +143,8 @@ def run_walk_forward():
             initial_capital=initial_capital,
             lookback=best_params['lookback'],
             rebalance=best_params['rebalance'],
-            use_shorts=False,
+            top_n=best_params['top_n'],
+            use_shorts=use_shorts,
             track_dates=False
         )
 
