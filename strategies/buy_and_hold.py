@@ -11,7 +11,7 @@ class BuyAndHoldStrategy(Strategy):
    testing mechanism for the strategy class, goes long and will never exit a position
     """
 
-    def __init__(self, bars, events, lookback=None, rebalance=None, top_n=None, use_shorts=False, verbose=False):
+    def __init__(self, bars, events, use_shorts=False, verbose=False, **kwargs):
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
         self.events = events
@@ -20,7 +20,7 @@ class BuyAndHoldStrategy(Strategy):
         
 
 
-    def calc_signals(self, event):
+    def calc_signals(self, event, regime=None):
         """
         Generate a Long SignalEvent object after the first MarketSignal arrives
         """

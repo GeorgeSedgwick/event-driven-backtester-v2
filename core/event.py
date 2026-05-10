@@ -102,7 +102,7 @@ class FillEvent(Event):
         self.fill_cost = fill_cost
         self.commission = commission
         self.slippage = slippage
-        
+
 
 
 # type is just a class that creates other class

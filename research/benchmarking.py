@@ -11,7 +11,7 @@ from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 
 
 def compare_to_benchmark():
-    start_date = datetime(2021, 1, 1, tzinfo=timezone.utc)
+    start_date = datetime(2015, 1, 1, tzinfo=timezone.utc)
     end_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     csv_dir = '/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents'
@@ -30,10 +30,6 @@ def compare_to_benchmark():
         start_date=start_date,
         end_date=end_date,
         initial_capital=100000,
-        lookback=None,
-        rebalance=None,
-        top_n=None,
-        use_shorts=False,
         track_dates=False
         )
 
@@ -43,8 +39,8 @@ def compare_to_benchmark():
         start_date=start_date,
         end_date=end_date,
         initial_capital=100000,
-        lookback=126,
-        rebalance=21,
+        lookback=252,
+        rebalance=31,
         top_n=5,
         use_shorts=False,
         track_dates=False
@@ -91,7 +87,7 @@ def compare_to_benchmark():
     fig.update_xaxes(title_text="Time")
     fig.update_yaxes(title_text="Portfolio Value")
 
-    #fig.show()
+    fig.show()
 
 # ======= PLOT PRICE CHART ========
 

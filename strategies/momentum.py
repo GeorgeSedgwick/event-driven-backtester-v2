@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from datetime import datetime, timezone
 
 from core.event import SignalEvent
 from .base import Strategy
@@ -19,36 +20,11 @@ class MomentumStrategy(Strategy):
         self.short_period, self.med_period = 30, 75
 
 
-
         self.use_shorts = use_shorts
         self.verbose = verbose
 
     def should_rebalance(self):
         return self.days_since_rebalance == 0 or self.days_since_rebalance >= self.rebalance_period
-
-    def check_regime(self):
-        bars = self.bars.get_latest_bars("SPY", N=self.med_period)
-        if bars is not None and bars != []:
-
-            if len(bars) >= self.med_period:
-                closes_med = np.array([bar.close for bar in bars])
-                closes_short = np.array([bar.close for bar in bars[-self.short_period:]])
-                sma_med = np.mean(closes_med)
-                sma_short = np.mean(closes_short)
-
-                if sma_short < sma_med:
-                    return "BEAR"
-                elif sma_short > sma_med:
-                    return "BULL"
-
-                else:
-                    return "FLAT"
-                
-            else:
-                #print(f"Not enough bars to compute regime.")
-                return "FLAT"
-
-    
 
 
     def get_rankings(self):
@@ -67,7 +43,7 @@ class MomentumStrategy(Strategy):
         return rankings
 
                     
-    def calc_signals(self, event):
+    def calc_signals(self, event, regime):
         if event.type == "MARKET":
 
             if self.should_rebalance():
@@ -80,9 +56,6 @@ class MomentumStrategy(Strategy):
                 top = [i[0] for i in top_tuples]
                 bottom = [i[0] for i in bottom_tuples]
 
-                regime = self.check_regime()
-
-
                 for ticker in self.ticker_list:
                     
                     bars = self.bars.get_latest_bars(ticker, N=1)
@@ -93,11 +66,14 @@ class MomentumStrategy(Strategy):
                     dt = bars[0].datetime
                     close = bars[0].close
 
-
                     if regime == "BULL" and ticker in top:
                         signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
                     elif regime == "BEAR" and ticker in bottom and self.use_shorts == True:
                         signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close)
+                    elif regime == "RECOVERY" and ticker in top:
+                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
+                    elif regime == "FLAT" and ticker in top:
+                        signal = SignalEvent(ticker, dt, "LONG", use_risk_manager=True, price=close)
                     else:
                         signal = SignalEvent(ticker, dt, "FLAT")
 

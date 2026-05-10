@@ -136,6 +136,7 @@ def display_walkforward_curve(combined_equity_curve):
     """
     Reveives a combined equity curve (Pandas Series) and creates a graph.
     """
+    
     fig = go.Figure()
     fig = fig.add_trace(go.Scatter(x=combined_equity_curve.index,
                                     y=combined_equity_curve,

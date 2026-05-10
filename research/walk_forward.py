@@ -5,7 +5,6 @@ from strategies import MomentumStrategy
 from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 import plotly.graph_objects as go
 from research import performance as pf
-pd.options.display.max_rows
 import itertools
 
 
@@ -72,9 +71,10 @@ def run_walk_forward():
     base_curves = []
 
     param_grid = {
-        'lookback': [126],
-        'rebalance': [21, 36, 48],
-        'top_n': [5, 10, 15]
+        'lookback': [252],
+        'rebalance': [31],
+        'top_n': [5, 10],
+
     }
     
 
@@ -172,8 +172,12 @@ def run_walk_forward():
 
 
 
-    comb_eq = pd.concat(adj_curves).sort_index()
+    comb_eq = pd.concat(adj_curves).sort_index().dropna()
 
+    max_dd, dd_duration = pf.create_drawdowns(comb_eq)
+    print(f"\n===== OUT OF SAMPLE RESULTS =====")
+    print(f"Max Drawdown: {max_dd:.2f}% | Drawdown Duration: {int(dd_duration)}\nTotal Portfolio Value: ${comb_eq.iloc[-1] * 100000:.2f}")
     pf.display_walkforward_curve(comb_eq)
+    
 
     

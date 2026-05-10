@@ -6,15 +6,19 @@ from data.datahandler import HistoricCSVDataHandler
 from core.portfolio import NaivePortfolio
 from core.execution import SimulatedExecutionHandler
 
+from models.gaussian import GaussianMarketRegimeDetector
 
 
 
-def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, lookback, rebalance, top_n ,use_shorts, track_dates):
+
+def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, track_dates, **kwargs):
     events = Queue()
 
     bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
 
-    strategy = strategy_name(bars, events, lookback=lookback, rebalance=rebalance, top_n=top_n, use_shorts=use_shorts, verbose=False)
+    market_regime = GaussianMarketRegimeDetector(bars, warmup_freq=252, retrain_freq=21, n_components=4)
+
+    strategy = strategy_name(bars, events, **kwargs)
 
     port = NaivePortfolio(bars, events, start_date, initial_capital, verbose=False)
     
@@ -38,7 +42,8 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
                     if event.type == 'MARKET':
                         if track_dates: print(f"============= {event.datetime} ===========")
                         broker.execute_order()
-                        strategy.calc_signals(event)
+                        regime = market_regime.update()
+                        strategy.calc_signals(event, regime)
                         port.update_timeindex(event)
 
                     elif event.type == 'SIGNAL':

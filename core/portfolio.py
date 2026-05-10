@@ -94,7 +94,7 @@ class NaivePortfolio(Portfolio):
     
 
     def construct_all_holdings(self):
-        d = dict( (k,v) for k, v in [(s, 0.0) for s in self.ticker_list] )
+        d = dict.fromkeys(self.ticker_list, 0)
         d['cash'] = self.initial_capital
         d['commission'] = 0.0 # Cumulative accrued
         d['slippage'] = 0.0
@@ -109,7 +109,7 @@ class NaivePortfolio(Portfolio):
         Live data can skip this, as market data can parsed straight from brokerage.
         For backtesting, these need calculating manually.
         """
-        d = dict( (k,v) for k, v in [(s, 0.0) for s in self.ticker_list] )
+        d = dict.fromkeys(self.ticker_list, 0)
         d['cash'] = self.initial_capital
         d['commission'] = 0.0
         d['slippage'] = 0.0
@@ -120,7 +120,7 @@ class NaivePortfolio(Portfolio):
 
     def update_timeindex(self, event):
         """
-        - Creates a dictionary bars{}
+        - Creates a dictionary: bars{}
         - Store a copy of each tickers latest bar as bars[ticker]
         - Creates a snapshot of all current positions and adds to all_positions at latest datetime available
         - Creates a holdings snapshot of all current holdings... ''
