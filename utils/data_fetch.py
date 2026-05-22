@@ -50,6 +50,10 @@ def get_valid_tickers(tickers, csv_dir, start_date, end_date):
             print(f"{t}: Error - {e}")
     
     if "SPY" not in valid_tickers:
-        valid_tickers.append("SPY")
+        valid_tickers.insert(0, "SPY")
+
+    if "^VIX" not in valid_tickers:
+        valid_tickers.append("^VIX")
+        
     return valid_tickers
  

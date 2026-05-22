@@ -19,9 +19,13 @@ class MomentumStrategy(Strategy):
         self.days_since_rebalance = 0
         self.short_period, self.med_period = 30, 75
 
-
         self.use_shorts = use_shorts
         self.verbose = verbose
+
+        self.bull_count = 0
+        self.bear_count = 0
+        self.transition_count = 0
+        self.recovery_count = 0
 
     def should_rebalance(self):
         return self.days_since_rebalance == 0 or self.days_since_rebalance >= self.rebalance_period
@@ -41,9 +45,15 @@ class MomentumStrategy(Strategy):
                     momentum = np.log(closes[-1] / closes[0])
                     rankings[s] = momentum
         return rankings
+    
 
                     
     def calc_signals(self, event, regime):
+        if regime == "BULL": self.bull_count += 1
+        if regime == "BEAR": self.bear_count += 1
+        if regime == "TRANSITION": self.transition_count += 1
+        if regime == "RECOVERY": self.recovery_count += 1
+
         if event.type == "MARKET":
 
             if self.should_rebalance():
@@ -72,15 +82,14 @@ class MomentumStrategy(Strategy):
                         signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close)
                     elif regime == "RECOVERY" and ticker in top:
                         signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
-                    elif regime == "FLAT" and ticker in top:
-                        signal = SignalEvent(ticker, dt, "LONG", use_risk_manager=True, price=close)
+                    elif regime == "TRANSITION" and ticker in top:
+                        signal = SignalEvent(ticker, dt, "FLAT")
                     else:
                         signal = SignalEvent(ticker, dt, "FLAT")
 
                     self.events.put(signal)
 
 
-            
                 self.days_since_rebalance = 0
 
 

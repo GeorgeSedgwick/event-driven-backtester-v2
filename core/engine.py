@@ -60,5 +60,9 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     
     #print(f"Total Slippage: ${broker.total_slippage:.2f}")
     port.create_equity_curve_dataframe()
-
+    #print(f'BULL COUNT: {strategy.bull_count}')
+    #print(f'BEAR COUNT: {strategy.bear_count}')
+    #print(f'TRANSITION COUNT: {strategy.transition_count}')
+    #print(f'RECOVERY COUNT: {strategy.recovery_count}')
+    print("backtest complete.")
     return port

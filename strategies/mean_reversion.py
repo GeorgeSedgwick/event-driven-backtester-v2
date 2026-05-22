@@ -4,115 +4,90 @@ from .base import Strategy
 from core.event import SignalEvent
 
 class MeanReversionStrategy(Strategy):
-    def __init__(self, bars, events, lookback): 
+    def __init__(self, bars, events, lookback, short_period, long_period, z_condition, z_exit_threshold, use_shorts, verbose=False): 
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
         self.events = events
-        self.bought, self.short = self._calc_inital_bought()
-        self.short_period, self.med_period = 50, 200
         self.lookback = lookback
-        self.z_condition = 2
-        self.z_exit_threshold = 1
-        self.entry_bar = {s: None for s in self.ticker_list}
+        self.short_period = short_period
+        self.long_period = long_period
+        self.z_condition = z_condition
+        self.z_exit_threshold = z_exit_threshold
+        self.use_shorts = use_shorts
+        self.verbose = verbose
 
-    def _calc_inital_bought(self):
-        bought = {}
-        short = {}
+        self.top_percentile = 200
+        self.bottom_percentile = 200
+
+
+
+
+    def get_rankings(self):
+        rankings = {}
         for s in self.ticker_list:
-            bought[s] = False
-            short[s] = False
+            if s == "SPY":
+                continue
+            bars = self.bars.get_latest_bars(s, N=252)
 
-        
-        return bought, short
-    
-
-    def check_regime(self, s):
-            bars = self.bars.get_latest_bars(s, N=self.med_period)
             if bars is not None and bars != []:
-                    
-                if len(bars) >= self.med_period:
-                    closes_med = np.array([bar[4] for bar in bars])
-                    closes_short = np.array([bar[4] for bar in bars[-self.short_period:]])
-                    sma_med = np.mean(closes_med)
-                    sma_short = np.mean(closes_short)
-                    if sma_short < sma_med:
-                        return "BEAR"
-                    elif sma_short > sma_med:
-                        return "BULL"
-                    else:
-                        return "FLAT"
-                else:
-                    return "FLAT"
+                
+                if len(bars) >= self.lookback:
+                    closes = np.array([bar.close for bar in bars])
+                    momentum = np.log(closes[-1] / closes[0])
+                    rankings[s] = momentum
+        return rankings
+
+    def calc_signals(self, event, regime):
+        
+        rankings = self.get_rankings()
+        sorted_rankings = sorted(rankings.items(), key=lambda x: x[1], reverse=True)
+        top_tuples = sorted_rankings[:self.top_percentile]
+        bottom_tuples = sorted_rankings[-self.bottom_percentile:]
+
+        top = [i[0] for i in top_tuples]
+        bottom = [i[0] for i in bottom_tuples]
 
 
-    def calc_signals(self, event):
+
+
+
+
         if event.type == "MARKET":
 
-            for s in self.ticker_list:
-                    regime = self.check_regime(s)
-                    bars = self.bars.get_latest_bars(s, N=self.lookback)
+            for ticker in self.ticker_list:
+                    bars = self.bars.get_latest_bars(ticker, N=self.lookback)
                     
                     if bars is not None and bars != []:
                         if len(bars) >= self.lookback:
-                            z_period_closes = np.array([bar[4] for bar in bars])
+
+
+                            dt = bars[0].datetime
+                            close = bars[0].close
+
+                            z_period_closes = np.array([bar.close for bar in bars])
                             sma = np.mean(z_period_closes)
                             std = np.std(z_period_closes)
+                            if std == 0:
+                                continue
                             z_score = (z_period_closes[-1] - sma) / std
 
-                    
+                            signal = None
+                            if regime == "FLAT":
+                                if z_score < -self.z_condition and ticker not in top and ticker not in bottom:
+                                    signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
+
+                                elif z_score > self.z_condition and self.use_shorts == True and ticker not in top and ticker not in bottom:
+                                    signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close)
+      
+                                elif abs(z_score) < self.z_exit_threshold:
+                                    signal = SignalEvent(ticker, dt, 'FLAT')
+
                             
-                            if regime == "BULL":
+                            else:
+                                signal = SignalEvent(ticker, dt, "FLAT")
 
-                                if z_score < -self.z_condition and not self.bought[s]:
-                                    signal = SignalEvent(bars[-1][0], bars[-1][1], 'LONG_ENTRY', use_risk_manager=True)
-                                    self.events.put(signal)
-                                    
-                                    self.bought[s] = True
-                                    self.short[s] = False
-                                    self.entry_bar[s] = bars[-1][1]
-                                
-                                elif abs(z_score) < self.z_exit_threshold:
-                                    current_bar = bars[-1][1]
-
-                                    if self.bought[s] and current_bar > self.entry_bar[s]:
-                                        signal = SignalEvent(bars[-1][0], bars[-1][1], 'LONG_EXIT')
-                                        self.events.put(signal)
-                                        self.bought[s] = False
-                                        self.entry_bar[s] = None
-                                        
-                                    if self.short[s] and (current_bar < self.entry_bar[s] or abs(z_score) < self.z_exit_threshold):
-                                        signal = SignalEvent(bars[-1][0], bars[-1][1], 'SHORT_EXIT')
-                                        self.events.put(signal)
-                                        self.short[s] = False
-                                        self.entry_bar[s] = None
-                                
-                                
-                            elif regime == "BEAR":
-
-                                if z_score > self.z_condition and not self.short[s]:
-                                    signal = SignalEvent(bars[-1][0], bars[-1][1], 'SHORT_ENTRY', use_risk_manager=True)
-                                    self.events.put(signal)
-                                    self.short[s] = True
-                                    self.bought[s] = False
-                                    self.entry_bar[s] = bars[-1][1]
-
-                                elif abs(z_score) < self.z_exit_threshold:
-                                    current_bar = bars[-1][1]
-
-                                    if self.bought[s] and current_bar > self.entry_bar[s]:
-                                        signal = SignalEvent(bars[-1][0], bars[-1][1], 'LONG_EXIT')
-                                        self.events.put(signal)
-                                        self.bought[s] = False
-                                        self.entry_bar[s] = None
-                                        
-                                    if self.short[s] and (current_bar < self.entry_bar[s] or abs(z_score) < self.z_exit_threshold):
-                                        signal = SignalEvent(bars[-1][0], bars[-1][1], 'SHORT_EXIT')
-                                        self.events.put(signal)
-                                        self.short[s] = False
-                                        self.entry_bar[s] = None
-                                
-                        
-
+                            if signal is not None:
+                                self.events.put(signal)
 
 
 

@@ -6,7 +6,7 @@ import os
 from research import performance as pf
 
 from core.engine import run_backtest
-from strategies import BuyAndHoldStrategy, MomentumStrategy
+from strategies import BuyAndHoldStrategy, MomentumStrategy, MeanReversionStrategy
 from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 
 
@@ -18,21 +18,39 @@ def compare_to_benchmark():
 
     valid_tickers = []
     tickers = get_snp500_tickers()
-    valid_tickers = get_valid_tickers(tickers, csv_dir ,start_date, end_date)
-    valid_tickers.append("SPY")
+    valid_tickers = get_valid_tickers(tickers, csv_dir, start_date, end_date)
+    if "SPY" in valid_tickers:
+        valid_tickers.remove("SPY")
+    valid_tickers.insert(0, "SPY")
+    valid_tickers.append("^VIX")
 
     for file in os.listdir(csv_dir):
         df = pd.read_csv(os.path.join(csv_dir, file), parse_dates=['Date'])
 
     bnh_port = run_backtest(
         BuyAndHoldStrategy,
-        ['SPY'],
+        ['SPY', '^VIX'],
         start_date=start_date,
         end_date=end_date,
         initial_capital=100000,
         track_dates=False
         )
 
+    """strategy_port = run_backtest(
+        MeanReversionStrategy,
+        valid_tickers,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=100000,
+        lookback=30,
+        short_period=21,
+        long_period=63,
+        z_condition=2.0,
+        z_exit_threshold=0.5,
+        use_shorts=False,
+        track_dates=False
+        )"""
+    
     strategy_port = run_backtest(
         MomentumStrategy,
         valid_tickers,
@@ -40,18 +58,15 @@ def compare_to_benchmark():
         end_date=end_date,
         initial_capital=100000,
         lookback=252,
-        rebalance=31,
+        rebalance=42,
         top_n=5,
         use_shorts=False,
         track_dates=False
         )
     
-    # INITIAL TEST DATES:
-    # start_date=datetime(2020, 1, 2, tzinfo=timezone.utc),
-    # end_date=datetime(2023, 12, 29, tzinfo=timezone.utc)
-    
     strategy_title = "Momentum" # FOR GRAPH (EDIT HERE)
     asset = 'S&P VS MOMENTUM (S&P UNIVERSE)' # USE TICKER TO PLOT PRICE (EDIT HERE)
+
 
 
 
