@@ -31,7 +31,7 @@ class SignalEvent(Event):
     This is received by a Portfolio object and acted upon.
     """
 
-    def __init__(self, ticker, datetime, signal_type, strength=1, use_risk_manager=True, price=None):
+    def __init__(self, ticker, datetime, signal_type, strength=1, use_risk_manager=True, price=None, regime=None):
         """
         Initialises the SignalEvent.
 
@@ -45,6 +45,7 @@ class SignalEvent(Event):
         self.strength = strength
         self.use_risk_manager = use_risk_manager
         self.price = price
+        self.regime = regime
 
 
 class OrderEvent(Event):
@@ -84,7 +85,7 @@ class FillEvent(Event):
     an instrument actually filled an at what price. In addition, stores  the commission of the trade from the brokerage.
     """
 
-    def __init__(self, timeindex, ticker, exchange, quantity, direction, fill_price, fill_cost, commission, slippage):
+    def __init__(self, timeindex, trade_id, ticker, exchange, quantity, direction, fill_price, fill_cost, commission, slippage):
         """
         Initialises the FillEvent object, sets the symbol, exchange, quantity, direction, cost of  fill and an optimal commission
         
@@ -94,6 +95,7 @@ class FillEvent(Event):
 
         self.type = 'FILL'
         self.timeindex = timeindex
+        self.trade_id = trade_id
         self.ticker = ticker
         self.exchange = exchange
         self.quantity = quantity

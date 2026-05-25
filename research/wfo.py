@@ -101,19 +101,25 @@ def run_wfo():
         "A": None,
         "B": 0,
         "C": 0,
-        "D": 0
+        "D": 0,
+        "E": 0,
+        "F": 0
     }
 
     a_start, a_end = datetime(2006, 1, 1, tzinfo=timezone.utc), datetime(2008, 12, 31, tzinfo=timezone.utc)
     b_start, b_end = datetime(2009, 1, 1, tzinfo=timezone.utc), datetime(2011, 12, 31, tzinfo=timezone.utc)
     c_start, c_end = datetime(2012, 1, 1, tzinfo=timezone.utc), datetime(2014, 12, 31, tzinfo=timezone.utc)
     d_start, d_end = datetime(2015, 1, 1, tzinfo=timezone.utc), datetime(2017, 12, 31, tzinfo=timezone.utc)
+    e_start, e_end = datetime(2018, 1, 1, tzinfo=timezone.utc), datetime(2020, 12, 31, tzinfo=timezone.utc)
+    f_start, f_end = datetime(2021, 1, 1, tzinfo=timezone.utc), datetime(2023, 12, 31, tzinfo=timezone.utc)
 
     periods = [
         ('A', a_start, a_end),
         ('B', b_start, b_end),
         ('C', c_start, c_end),
-        ('D', d_start, d_end)
+        ('D', d_start, d_end),
+        ('E', e_start, e_end),
+        ('F', f_start, f_end)
     ]
 
     for i in range(len(periods) - 1):

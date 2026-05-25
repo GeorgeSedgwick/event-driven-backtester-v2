@@ -140,12 +140,5 @@ class GaussianMarketRegimeDetector():
 
             return self.regime_labels[self.current_regime]
             
-    def get_market_momentum(self):
-        bars = self.bars.get_latest_bars(ticker='SPY', N=21)
-        closes = np.array([bar.close for bar in bars])
-        momentum = np.log(closes[-1] - closes[0])
-
-        return momentum
-
         
 

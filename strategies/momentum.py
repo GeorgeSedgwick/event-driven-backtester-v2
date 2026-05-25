@@ -34,7 +34,7 @@ class MomentumStrategy(Strategy):
     def get_rankings(self):
         rankings = {}
         for s in self.ticker_list:
-            if s == "SPY":
+            if s == "SPY" or s == "^VIX":
                 continue
             bars = self.bars.get_latest_bars(s, N=self.lookback_period)
 
@@ -77,13 +77,13 @@ class MomentumStrategy(Strategy):
                     close = bars[0].close
 
                     if regime == "BULL" and ticker in top:
-                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
+                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
                     elif regime == "BEAR" and ticker in bottom and self.use_shorts == True:
-                        signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close)
+                        signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close, regime=regime)
                     elif regime == "RECOVERY" and ticker in top:
-                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close)
+                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
                     elif regime == "TRANSITION" and ticker in top:
-                        signal = SignalEvent(ticker, dt, "FLAT")
+                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
                     else:
                         signal = SignalEvent(ticker, dt, "FLAT")
 

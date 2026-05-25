@@ -2,6 +2,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from queue import Queue
+from random import randbytes
 
 from abc import ABC, abstractmethod
 from math import floor
@@ -64,8 +65,8 @@ class NaivePortfolio(Portfolio):
         self.start_date = start_date
         self.risk_manager = RiskManager(self)
         self.order_manager = BasicOrderManager(self)
-        self.trades = []
-
+        self.trades = {}
+        self.trade_ids = dict.fromkeys(self.ticker_list, None)
         self.verbose = verbose
 
         self.all_positions = self.construct_all_positions() # Stores list of all previous positions recorded at a timestamp of a data event.
@@ -204,11 +205,45 @@ class NaivePortfolio(Portfolio):
 
         if self.verbose: print(f"FILL {fill.ticker}: fill_cost {fill.fill_cost:.2f}")
         
+
         self.current_holdings['slippage'] += fill.slippage
         self.current_holdings['commission'] += fill.commission
         self.current_holdings['cash'] -= fill.fill_cost * fill_dir
         self.current_holdings['cash'] -= fill.commission
         self.total_fills += 1
+
+    def track_trade(self, event):
+        if event.type == 'FILL':
+
+            if self.trade_ids[event.ticker] is None:
+                trade_id = randbytes(n=25)
+
+                trade_entry = {
+                    'entry_datetime': event.timeindex,
+                    'ticker': event.ticker,
+                    'quantity': event.quantity,
+                    'direction': 'LONG' if event.direction == 'BUY' else 'SHORT',
+                    'entry_price': event.fill_price,
+                    'exit_datetime': None,
+                    'exit_price': None,
+                    'pnl': None
+                }
+
+                self.trades[trade_id] = trade_entry
+                self.trade_ids[event.ticker] = trade_id
+
+            else:
+                trade_id = self.trade_ids[event.ticker]
+                
+                self.trades[trade_id]['exit_price'] = event.fill_price
+                self.trades[trade_id]['exit_datetime'] = event.timeindex
+                self.trades[trade_id]['pnl'] = (self.trades[trade_id]['exit_price'] - self.trades[trade_id]['entry_price']) * self.trades[trade_id]['quantity']
+
+                self.trade_ids[event.ticker] = None
+
+
+
+
 
 
     def update_fill(self, event):
@@ -219,58 +254,7 @@ class NaivePortfolio(Portfolio):
 
             self.update_positions_from_fill(event)
             self.update_holdings_from_fill(event)
-
-
-            if event.direction == 'long_entry':
-                trade_entry = {
-                    'entry_datetime': event.timeindex,
-                    'ticker': event.ticker,
-                    'quantity': event.quantity,
-                    'direction': 'long',
-                    'entry_price': event.fill_price,
-                    'exit_price': None,
-                    'exit_datetime': None,
-                    'pnl': None
-                }
-                self.trades.append(trade_entry)
-
-
-            elif event.direction == 'short_entry':
-                trade_entry = {
-                    'entry_datetime': event.timeindex,
-                    'ticker': event.ticker,
-                    'quantity': event.quantity,
-                    'direction': 'short',
-                    'entry_price': event.fill_price,
-                    'exit_price': None,
-                    'exit_datetime': None,
-                    'pnl': None
-                }
-                self.trades.append(trade_entry)
-
-
-            elif event.direction == 'long_exit':
-                for trade in self.trades:
-                    if (trade['ticker'] == event.ticker
-                        and trade['exit_datetime'] == None
-                        and trade['direction'] == 'long'):
-
-                        trade['exit_price'] = event.fill_price
-                        trade['exit_datetime'] = event.timeindex
-                        trade['pnl'] = (trade['exit_price'] - trade['entry_price']) * trade['quantity']
-                        break
-
-            elif event.direction == 'short_exit':
-                for trade in self.trades:
-                    if (trade['ticker'] == event.ticker
-                        and trade['exit_datetime'] == None
-                        and trade['direction'] == 'short'):
-
-                        trade['exit_price'] = event.fill_price
-                        trade['exit_datetime'] = event.timeindex
-                        trade['pnl'] = (trade['exit_price'] - trade['entry_price']) * trade['quantity']
-                        break
-
+            self.track_trade(event)
 
 
 

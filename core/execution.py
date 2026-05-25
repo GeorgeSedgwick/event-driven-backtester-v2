@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from .event import FillEvent, OrderEvent
 from models.slippage import LogSlippageModel
 
+from random import randbytes
 
 
 class ExecutionHandler(ABC):
@@ -117,8 +118,11 @@ class SimulatedExecutionHandler(ExecutionHandler):
                 commission = self.calculate_ib_commission(fill_cost)
 
                 if fill_cost is not None:
+                    trade_id = randbytes(n=25)
+
                     fill_event = FillEvent(
                         current_datetime,
+                        trade_id,
                         event.ticker,
                         'EXCHANGE',
                         event.quantity,

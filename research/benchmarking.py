@@ -9,6 +9,10 @@ from core.engine import run_backtest
 from strategies import BuyAndHoldStrategy, MomentumStrategy, MeanReversionStrategy
 from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 
+pd.set_option("display.max_rows", None)
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", None)
+pd.set_option("display.max_colwidth", None)
 
 def compare_to_benchmark():
     start_date = datetime(2015, 1, 1, tzinfo=timezone.utc)
@@ -104,23 +108,10 @@ def compare_to_benchmark():
 
     fig.show()
 
-# ======= PLOT PRICE CHART ========
+    df_trades = pd.DataFrame.from_dict(strategy_port.trades, orient='index')
+    df_trades.index.name = "trade_id"
 
-    #all_bars = strategy_port.bars.get_all_bars(asset)
-    #dates = all_bars.index.values
-    #prices = all_bars['close'].values
-
-    trades, wins, losses, breakeven = strategy_port.get_trade_points()
-    
-    #df = pd.DataFrame(trades)
-    #print(f"\n\n========= ALL TRADES =========")
-    #print(df.to_string())
-    #print(f"Trade count: {len(trades)}")
-    
-    #pf.display_win_ratio(wins, losses)
-    #pf.display_payoff_ratio(trades)
-    #pf.create_price_chart(asset, dates, prices, trades) 
-
+    print(df_trades)
     print(f"Total Commission: ${strategy_port.current_holdings['commission']:.2f}")
     print(f"Total Slippage: ${strategy_port.current_holdings['slippage']:.2f}")
 
