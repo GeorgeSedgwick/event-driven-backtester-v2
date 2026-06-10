@@ -6,7 +6,7 @@ from core.event import SignalEvent
 from .base import Strategy
 
 class MomentumStrategy(Strategy):
-    def __init__(self, bars, events, lookback=252, rebalance=21, top_n=10, use_shorts=False, verbose=False):
+    def __init__(self, bars, events, lookback, rebalance, top_n, use_shorts=False, verbose=False):
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
         self.events = events
@@ -48,7 +48,17 @@ class MomentumStrategy(Strategy):
     
 
                     
-    def calc_signals(self, event, regime):
+    def calc_signals(self, event, regime_and_prob):
+        if regime_and_prob == None:
+            regime = ""
+            prob = 0
+            #print(f"Highest probregime: {regime} | Prob: {prob}")
+        else:
+            regime = regime_and_prob[0]
+            prob = regime_and_prob[1]
+            print(f"Highest prob regime: {regime} | Prob: {prob}")
+
+
         if regime == "BULL": self.bull_count += 1
         if regime == "BEAR": self.bear_count += 1
         if regime == "TRANSITION": self.transition_count += 1
@@ -76,13 +86,13 @@ class MomentumStrategy(Strategy):
                     dt = bars[0].datetime
                     close = bars[0].close
 
-                    if regime == "BULL" and ticker in top:
+                    if regime == "BULL" and prob >= 0.7 and ticker in top:
                         signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
-                    elif regime == "BEAR" and ticker in bottom and self.use_shorts == True:
-                        signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close, regime=regime)
-                    elif regime == "RECOVERY" and ticker in top:
+                    elif regime == "BEAR" and prob >= 0.52 and ticker in top:
                         signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
-                    elif regime == "TRANSITION" and ticker in top:
+                    elif regime == "RECOVERY" and prob >= 0.52 and ticker in top:
+                        signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
+                    elif regime == "TRANSITION" and prob >= 0.52 and ticker in top:
                         signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime)
                     else:
                         signal = SignalEvent(ticker, dt, "FLAT")

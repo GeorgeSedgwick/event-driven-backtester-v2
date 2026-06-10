@@ -55,7 +55,7 @@ class OrderEvent(Event):
     
     """
 
-    def __init__(self, ticker, order_type, quantity, direction):
+    def __init__(self, ticker, order_type, quantity, direction, regime):
         """
         Initialises the order type, setting whether it is a market order or a limit order, has a quantity and its direction (Buy or Sell)
 
@@ -66,6 +66,7 @@ class OrderEvent(Event):
         self.order_type = order_type
         self.quantity = quantity
         self.direction = direction
+        self.regime = regime
 
 
     def print_order(self):
@@ -73,8 +74,8 @@ class OrderEvent(Event):
         Outputs the values within the Order
         """
 
-        print("Order: Ticker=%s, Type=%s, Quantity=%s, Direction=%s" % \
-        (self.ticker, self.order_type, self.quantity, self.direction))
+        print("Order: Ticker=%s, Type=%s, Quantity=%s, Direction=%s, Regime=%s" % \
+        (self.ticker, self.order_type, self.quantity, self.direction, self.regime))
         
 
 
@@ -85,7 +86,7 @@ class FillEvent(Event):
     an instrument actually filled an at what price. In addition, stores  the commission of the trade from the brokerage.
     """
 
-    def __init__(self, timeindex, trade_id, ticker, exchange, quantity, direction, fill_price, fill_cost, commission, slippage):
+    def __init__(self, timeindex, ticker, exchange, quantity, direction, fill_price, fill_cost, commission, slippage, regime):
         """
         Initialises the FillEvent object, sets the symbol, exchange, quantity, direction, cost of  fill and an optimal commission
         
@@ -95,7 +96,6 @@ class FillEvent(Event):
 
         self.type = 'FILL'
         self.timeindex = timeindex
-        self.trade_id = trade_id
         self.ticker = ticker
         self.exchange = exchange
         self.quantity = quantity
@@ -104,6 +104,7 @@ class FillEvent(Event):
         self.fill_cost = fill_cost
         self.commission = commission
         self.slippage = slippage
+        self.regime = regime
 
 
 

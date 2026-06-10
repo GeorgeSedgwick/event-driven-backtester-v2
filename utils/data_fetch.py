@@ -4,8 +4,10 @@ import requests
 import io
 import os
 import json
+from datetime import datetime, timezone
 
 def get_snp500_tickers():
+
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
@@ -34,7 +36,6 @@ def get_valid_tickers(tickers, csv_dir, start_date, end_date):
     valid_tickers = []
     start = start_date.replace(tzinfo=None)
     end = end_date.replace(tzinfo=None)
-
     for t in tickers:
         path = os.path.join(csv_dir, f'{t}.csv')
         if not os.path.exists(path):

@@ -1,3 +1,4 @@
+# Import relevant modules.
 from queue import Queue, Empty
 from datetime import datetime
 
@@ -8,61 +9,95 @@ from core.execution import SimulatedExecutionHandler
 
 from models.gaussian import GaussianMarketRegimeDetector
 
+"""
+Runs the backtest engine loop.
 
+Params:
 
+- strategy_name: The user's chosen strategy.
+- ticker_list: List of tickers wished to trade/assess.
+- start_date: The date from which the backtester should start.
+- end_date: The date at which the backtester should end.
+- initial_capital: Set the value of initial capital to trade with.
+- regime_detector (default=None): if user has a regime detector they wish to pass they may, otherwise one will be instantiated inside the engine.
+- **kwargs: any other arguments that a specific strategy may require.
 
-def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, track_dates, **kwargs):
+"""
+
+# Run the backtest engine.
+def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, track_dates, regime_detector=None, **kwargs):
+    # Instantiate the main event queue.
     events = Queue()
 
-    bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constitutents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
+    # Instantiate the DataHandler (bars)
+    bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constituents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
 
-    market_regime = GaussianMarketRegimeDetector(bars, warmup_freq=252, retrain_freq=21, n_components=4)
+    # Instantiate the RegimeDetector (or accept the one passed in and reset the models DataHandler object).
+    if regime_detector == None:
+        regime_detector = GaussianMarketRegimeDetector(bars, warmup_freq=252, retrain_freq=21, n_components=4)
+    else:
+        regime_detector = regime_detector
+        regime_detector.prepare_for_new_fold(bars)
 
+    # Instantiate the user's chosen Strategy object
     strategy = strategy_name(bars, events, **kwargs)
 
+    # Instantiate the Portfolio object
     port = NaivePortfolio(bars, events, start_date, initial_capital, verbose=False)
     
+    # Instantiate the ExecutionHandler object
     broker = SimulatedExecutionHandler(events, bars, verbose=False)
 
+    # Run loop indefinitely.
     while True:
         if bars.continue_backtest:
             bars.update_bars()
             
+        # Unless bars.continue_backtest==False, then end the loop (backtest has complete).
         else:
             break
 
-
+        # Second loop, retrieve events from the event queue previously instantiated.
         while True:
             try:
                 event = events.get(False)
+            # Queue empty? No more events to process, end the backtest.
             except Empty:
                 break
             else:
                 if event is not None:
+                    # MarketEvent object is received.
                     if event.type == 'MARKET':
                         if track_dates: print(f"============= {event.datetime} ===========")
+
+                        # Execute all pending orders (stored in ExecutionHandler queue, enters at today's open (T+1)).
                         broker.execute_order()
-                        regime = market_regime.update()
-                        strategy.calc_signals(event, regime)
+
+                        # Retrieves a tuple consisting of the highest probable regime and its probability (for pos sizing).
+                        regime_and_prob = regime_detector.update()
+
+                        # Calculates signals from prices, uses prob of regime for degree of confidence in trade.
+                        strategy.calc_signals(event, regime_and_prob)
+
+                        # Update the timeindex.
                         port.update_timeindex(event)
 
+                    # SignalEvent object is received.
                     elif event.type == 'SIGNAL':
                         port.update_signal(event)
                         
-
+                    # OrderEvent object is received.
                     elif event.type == 'ORDER':
-                        #broker.execute_order(event)
+                        # Add Order to ExecutionHandler's queue, store for tomorrow's open.
                         broker.queue_order_for_execution(event)
                         
-
+                    # FillEvent object is received.
                     elif event.type == 'FILL':
+                        # Update portfolio from FillEvent.
                         port.update_fill(event)
     
-    #print(f"Total Slippage: ${broker.total_slippage:.2f}")
+    # Create EQ Curve DataFrame.
     port.create_equity_curve_dataframe()
-    #print(f'BULL COUNT: {strategy.bull_count}')
-    #print(f'BEAR COUNT: {strategy.bear_count}')
-    #print(f'TRANSITION COUNT: {strategy.transition_count}')
-    #print(f'RECOVERY COUNT: {strategy.recovery_count}')
-    print("backtest complete.")
-    return port
+
+    # Return PortfolioObject, and RegimeDetector object (for potential reuse).
+    return port, regime_detector

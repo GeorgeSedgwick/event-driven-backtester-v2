@@ -118,11 +118,9 @@ class SimulatedExecutionHandler(ExecutionHandler):
                 commission = self.calculate_ib_commission(fill_cost)
 
                 if fill_cost is not None:
-                    trade_id = randbytes(n=25)
 
                     fill_event = FillEvent(
                         current_datetime,
-                        trade_id,
                         event.ticker,
                         'EXCHANGE',
                         event.quantity,
@@ -131,6 +129,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
                         fill_cost, 
                         commission,
                         slippage_cost,
+                        event.regime
                     )
 
                     self.events.put(fill_event)

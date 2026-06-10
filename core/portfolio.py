@@ -9,7 +9,7 @@ from math import floor
 from .event import FillEvent, OrderEvent
 from .risk import RiskManager
 from .oms import BasicOrderManager
-from research.performance import create_sharpe_ratio, create_drawdowns
+from performance import *
 
 
 class Portfolio(ABC):
@@ -66,7 +66,8 @@ class NaivePortfolio(Portfolio):
         self.risk_manager = RiskManager(self)
         self.order_manager = BasicOrderManager(self)
         self.trades = {}
-        self.trade_ids = dict.fromkeys(self.ticker_list, None)
+        self.trade_ids = dict.fromkeys(self.ticker_list, None) # Temp
+        self.id_list = [] # Permanent
         self.verbose = verbose
 
         self.all_positions = self.construct_all_positions() # Stores list of all previous positions recorded at a timestamp of a data event.
@@ -216,13 +217,14 @@ class NaivePortfolio(Portfolio):
         if event.type == 'FILL':
 
             if self.trade_ids[event.ticker] is None:
-                trade_id = randbytes(n=25)
+                trade_id = randbytes(n=10)
 
                 trade_entry = {
                     'entry_datetime': event.timeindex,
                     'ticker': event.ticker,
                     'quantity': event.quantity,
                     'direction': 'LONG' if event.direction == 'BUY' else 'SHORT',
+                    'regime': event.regime,
                     'entry_price': event.fill_price,
                     'exit_datetime': None,
                     'exit_price': None,
@@ -231,6 +233,7 @@ class NaivePortfolio(Portfolio):
 
                 self.trades[trade_id] = trade_entry
                 self.trade_ids[event.ticker] = trade_id
+                self.id_list.append(trade_id)
 
             else:
                 trade_id = self.trade_ids[event.ticker]
@@ -272,7 +275,7 @@ class NaivePortfolio(Portfolio):
         else:
             return None
             
-        order = OrderEvent(ticker, order_type, abs(net_quantity), direction)
+        order = OrderEvent(ticker, order_type, abs(net_quantity), direction, signal.regime)
 
         return order
 

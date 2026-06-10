@@ -23,10 +23,19 @@ class BuyAndHoldStrategy(Strategy):
         self.transition_count = 0
         self.recovery_count = 0
 
-    def calc_signals(self, event, regime):
+    def calc_signals(self, event, regime_and_prob):
         """
         Generate a Long SignalEvent object after the first MarketSignal arrives
         """
+        if regime_and_prob == None:
+            regime = ""
+            prob = 0
+            #print(f"Highest prob regime: {regime} | Prob: {prob}")
+        else:
+            regime = regime_and_prob[0]
+            prob = regime_and_prob[1]
+            #print(f"Highest prob regime: {regime} | Prob: {prob}")
+
         if regime == "BULL": self.bull_count += 1
         if regime == "BEAR": self.bear_count += 1
         if regime == "TRANSITION": self.transition_count += 1
