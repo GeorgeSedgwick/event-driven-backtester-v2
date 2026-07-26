@@ -7,9 +7,11 @@ from random import randbytes
 from abc import ABC, abstractmethod
 from math import floor
 from .event import FillEvent, OrderEvent
-from .risk import RiskManager
+from .risk import RiskManager, StatArbRiskManager
 from .oms import BasicOrderManager
+from strategies import MomentumStrategy, BuyAndHoldStrategy, StatArbStrategy
 from performance import *
+from performance.dashboard import equity_data, position_data
 
 
 class Portfolio(ABC):
@@ -44,7 +46,7 @@ class NaivePortfolio(Portfolio):
     """
 
 
-    def __init__(self, bars, events, start_date, initial_capital, verbose=False):
+    def __init__(self, strategy, bars, events, start_date, initial_capital, verbose=False):
         """
         Initialises the portfolio with bars and an event queue.
         Also includes a starting datetime index and initial capital.
@@ -63,7 +65,8 @@ class NaivePortfolio(Portfolio):
         self.initial_capital = initial_capital
         self.total_fills = 0
         self.start_date = start_date
-        self.risk_manager = RiskManager(self)
+        
+        self.risk_manager = RiskManager(self) if strategy == MomentumStrategy or strategy == BuyAndHoldStrategy else StatArbRiskManager(self)
         self.order_manager = BasicOrderManager(self)
         self.trades = {}
         self.trade_ids = dict.fromkeys(self.ticker_list, None) # Temp
@@ -71,7 +74,7 @@ class NaivePortfolio(Portfolio):
         self.verbose = verbose
 
         self.all_positions = self.construct_all_positions() # Stores list of all previous positions recorded at a timestamp of a data event.
-        self.current_positions = dict( (k,v) for k, v in [(s, 0) for s in self.ticker_list] ) 
+        self.current_positions = {s: {'quantity': 0, 'price_high_or_low': 0} for s in self.ticker_list}
         # A dictionary of what is held at the time of the heartbeat. 
 
 
@@ -140,7 +143,7 @@ class NaivePortfolio(Portfolio):
         positions_snapshot['datetime'] = bars[self.ticker_list[0]][0].datetime
 
         for ticker in self.ticker_list:
-            positions_snapshot[ticker] = self.current_positions[ticker]
+            positions_snapshot[ticker] = self.current_positions[ticker]['quantity']
 
         self.all_positions.append(positions_snapshot)
 
@@ -158,11 +161,24 @@ class NaivePortfolio(Portfolio):
             if ticker_bar is None or len(ticker_bar) == 0:
                 continue
 
-            market_value = self.current_positions[ticker] * ticker_bar[0].close
+            market_value = self.current_positions[ticker]['quantity'] * ticker_bar[0].close
             holdings_snapshot[ticker] = market_value
             holdings_snapshot['total'] += market_value
-        
+
+            qty = self.current_positions[ticker]['quantity']
+            if qty > 0:
+                direction = "LONG"
+            elif qty < 0:
+                direction = "SHORT"
+            else:
+                continue
+
+            position_data.append({'ticker': ticker, 'direction': direction, 'quantity': qty})
+
         self.current_holdings['total'] = holdings_snapshot['total']
+        equity_data.append({'datetime': holdings_snapshot['datetime'], 'total': self.current_holdings['total']})
+        position_data.clear()
+
         self.all_holdings.append(holdings_snapshot)
 
             
@@ -182,8 +198,20 @@ class NaivePortfolio(Portfolio):
         elif fill.direction == 'SELL':
             fill_dir = -1
         
+        pos = self.current_positions[fill.ticker]
 
-        self.current_positions[fill.ticker] += fill_dir*fill.quantity
+        prev_qty = pos['quantity']
+        change = fill_dir * fill.quantity
+        new_qty = prev_qty + change
+
+        pos['quantity'] = new_qty
+
+        if prev_qty == 0 and new_qty != 0:
+            pos['price_high_or_low'] = fill.fill_price
+        """        if self.current_positions[fill.ticker]['quantity'] == 0:
+            self.current_positions[fill.ticker]['price_high'] = fill.fill_price
+        self.current_positions[fill.ticker]['quantity'] += fill_dir*fill.quantity
+        """
 
 
 
@@ -215,36 +243,256 @@ class NaivePortfolio(Portfolio):
 
     def track_trade(self, event):
         if event.type == 'FILL':
-
-            if self.trade_ids[event.ticker] is None:
-                trade_id = randbytes(n=10)
+            # Start tracking new long position
+            if self.trade_ids[event.ticker] == None and event.action == "OPEN" and event.direction == "BUY":
+                id = randbytes(n=10)
 
                 trade_entry = {
                     'entry_datetime': event.timeindex,
                     'ticker': event.ticker,
                     'quantity': event.quantity,
-                    'direction': 'LONG' if event.direction == 'BUY' else 'SHORT',
+                    'direction': 'LONG',
                     'regime': event.regime,
                     'entry_price': event.fill_price,
                     'exit_datetime': None,
                     'exit_price': None,
-                    'pnl': None
-                }
+                    'pnl': 0
+                }                
+                self.trades[id] = trade_entry
+                self.trade_ids[event.ticker] = id
+                self.id_list.append(id)
 
-                self.trades[trade_id] = trade_entry
-                self.trade_ids[event.ticker] = trade_id
-                self.id_list.append(trade_id)
+            # Track and adjust for increased exposure to long position
+            elif self.trade_ids[event.ticker] != None and event.action == "ADD" and event.direction == "BUY":
+                id = self.trade_ids[event.ticker]
+                prev_qty = self.trades[id]['quantity'] 
+                new_pos_qty = self.trades[id]['quantity'] + event.quantity
 
-            else:
-                trade_id = self.trade_ids[event.ticker]
+                prev_weight = 1 - prev_qty / (new_pos_qty)
+                curr_weight = 1 - event.qty / (new_pos_qty)                
+
+                new_avg_price = (prev_weight * self.trades[id]['entry_price']) + (curr_weight * event.quantity)
+                self.trades[id].update({
+                    'quantity': new_pos_qty,
+                    'entry_price': new_avg_price
+                })
+
+            # Track and adjust for decreased exposure to long position
+            elif self.trade_ids[event.ticker] != None and event.action == "REDUCE" and event.direction == "SELL":
+                id = self.trade_ids[event.ticker]
+                prev_qty = self.trades[id]['quantity']
+                new_pos_qty = prev_qty - event.quantity
+
+                partial_pnl = event.fill_price - self.trades[id]['entry_price'] * prev_qty
+
+                self.trades[id].update({
+                    'quantity': new_pos_qty,
+                    'pnl': partial_pnl
+                })
                 
-                self.trades[trade_id]['exit_price'] = event.fill_price
-                self.trades[trade_id]['exit_datetime'] = event.timeindex
-                self.trades[trade_id]['pnl'] = (self.trades[trade_id]['exit_price'] - self.trades[trade_id]['entry_price']) * self.trades[trade_id]['quantity']
+
+
+
+            elif self.trade_ids[event.ticker] != None and event.action == "CLOSE" and event.direction == "SELL":
+                id = self.trade_ids[event.ticker]
+                pnl = self.trades[id]['pnl'] + ((event.fill_price - self.trades[id]['entry_price']) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+    
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
 
                 self.trade_ids[event.ticker] = None
 
 
+            elif self.trade_ids[event.ticker] != None and event.action == "NET" and event.direction == "SELL":
+                id = self.trade_ids[event.ticker]
+                
+                pnl = self.trades[id]['pnl'] + ((event.fill_price - self.trades[id]['entry_price']) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
+
+
+                new_trade_quantity = self.trades[id]['quantity'] - event.quantity
+                new_trade_id = randbytes(n=10)
+                trade_entry = {
+                    'entry_datetime': event.timeindex,
+                    'ticker': event.ticker,
+                    'quantity': new_trade_quantity,
+                    'direction': 'SHORT',
+                    'regime': event.regime,
+                    'entry_price': event.fill_price,
+                    'exit_datetime': None,
+                    'exit_price': None,
+                    'pnl': 0
+                }                
+                self.trades[new_trade_id] = trade_entry
+                self.trade_ids[event.ticker] = new_trade_id
+                self.id_list.append(new_trade_id)
+
+            
+            elif self.trade_ids[event.ticker] == None and event.action == "OPEN" and event.direction == "SELL":
+                id = randbytes(n=10)
+
+                trade_entry = {
+                    'entry_datetime': event.timeindex,
+                    'ticker': event.ticker,
+                    'quantity': event.quantity,
+                    'direction': 'SHORT',
+                    'regime': event.regime,
+                    'entry_price': event.fill_price,
+                    'exit_datetime': None,
+                    'exit_price': None,
+                    'pnl': 0
+                }                
+                self.trades[id] = trade_entry
+                self.trade_ids[event.ticker] = id
+                self.id_list.append(id)
+
+            elif self.trade_ids[event.ticker] != None and event.action == "ADD" and event.direction == "SELL":
+                id = self.trade_ids[event.ticker]
+                prev_qty = self.trades[id]['quantity'] 
+                new_pos_qty = self.trades[id]['quantity'] + event.quantity
+
+                prev_weight = 1 - prev_qty / (new_pos_qty)
+                curr_weight = 1 - event.qty / (new_pos_qty)                
+
+                new_avg_price = (prev_weight * self.trades[id]['entry_price']) + (curr_weight * event.quantity)
+                self.trades[id].update({
+                    'quantity': new_pos_qty,
+                    'entry_price': new_avg_price
+                })
+
+            
+            elif self.trade_ids[event.ticker] != None and event.action == "REDUCE" and event.direction == "BUY":
+                id = self.trade_ids[event.ticker]
+                prev_qty = self.trades[id]['quantity']
+                new_pos_qty = prev_qty - event.quantity
+
+                partial_pnl = (self.trades[id]['entry_price'] - event.fill_price) * self.trades[id]['quantity']
+
+                self.trades[id].update({
+                    'quantity': new_pos_qty,
+                    'pnl': partial_pnl
+                })
+
+
+
+            elif self.trade_ids[event.ticker] != None and event.action == "CLOSE" and event.direction == "BUY":
+                id = self.trade_ids[event.ticker]
+                print(f"Closing short for: {event.ticker}: Trade ID: {id}")
+
+                pnl = self.trades[id]['pnl'] + ((self.trades[id]['entry_price'] - event.fill_price) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+    
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
+
+                self.trade_ids[event.ticker] = None   
+
+
+            elif self.trade_ids[event.ticker] != None and event.action == "NET" and event.direction == "BUY":
+                id = self.trade_ids[event.ticker]
+
+                pnl = self.trades[id]['pnl'] + ((self.trades[id]['entry_price'] - event.fill_price) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
+
+                new_trade_quantity = event.quantity - self.trades[id]['quantity']
+
+                new_trade_id = randbytes(n=10)
+                trade_entry = {
+                    'entry_datetime': event.timeindex,
+                    'ticker': event.ticker,
+                    'quantity': new_trade_quantity,
+                    'direction': 'LONG',
+                    'regime': event.regime,
+                    'entry_price': event.fill_price,
+                    'exit_datetime': None,
+                    'exit_price': None,
+                    'pnl': 0
+                }                
+                self.trades[new_trade_id] = trade_entry
+                self.trade_ids[event.ticker] = new_trade_id
+                self.id_list.append(new_trade_id)
+
+            elif self.trade_ids[event.ticker] != None and event.action == "STOP" and event.direction == "BUY":
+                id = self.trade_ids[event.ticker]
+                pnl = self.trades[id]['pnl'] + ((self.trades[id]['entry_price'] - event.fill_price) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+    
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
+
+                print(f"STOP TRACKED FOR {event.ticker}: {event.timeindex}")
+
+                self.trade_ids[event.ticker] = None   
+
+
+            elif self.trade_ids[event.ticker] != None and event.action == "STOP" and event.direction == "SELL":
+                id = self.trade_ids[event.ticker]
+                pnl = self.trades[id]['pnl'] + ((event.fill_price - self.trades[id]['entry_price']) * self.trades[id]['quantity'])
+                trade_return = pnl / (self.trades[id]['entry_price'] * self.trades[id]['quantity'])
+    
+                holding_period = (event.timeindex - self.trades[id]['entry_datetime'] )
+                
+                self.trades[id].update({
+                    'exit_price': event.fill_price,
+                    'exit_datetime': event.timeindex,
+                    'pnl': pnl,
+                    'return': trade_return,
+                    'holding_period': holding_period
+                })
+
+
+                print(f"STOP TRACKED FOR {event.ticker}: {event.timeindex}")
+
+                self.trade_ids[event.ticker] = None
+
+
+
+                
+
+
+
+
+        
 
 
 
@@ -258,25 +506,73 @@ class NaivePortfolio(Portfolio):
             self.update_positions_from_fill(event)
             self.update_holdings_from_fill(event)
             self.track_trade(event)
+            #print(self.current_positions)
 
 
 
-    def generate_naive_order(self, signal, net_quantity):
+    def generate_naive_order(self, signal, net_quantity, current_pos):
 
         order = None
 
         ticker = signal.ticker
         order_type = 'MKT'
-        
+        order_quantity = abs(net_quantity)
+
+
+
+
         if net_quantity > 0:
-            direction = 'BUY'
+            # Open long position
+            if current_pos == 0:
+                direction = 'BUY'
+                action = "OPEN"
+
+            # Increase exposure on long position
+            if current_pos > 0:
+                direction = 'BUY'
+                action = "ADD"
+
+            # Close a short position
+            if current_pos < 0 and current_pos + net_quantity == 0:
+                direction = 'BUY'
+                action = 'CLOSE'
+
+            # Flip a short position
+            if current_pos < 0 and current_pos + net_quantity > 0:
+                direction = 'BUY'
+                action = 'NET'
+
+
+
+
         elif net_quantity < 0:
-            direction = 'SELL'
+            # Open a short position
+            if current_pos == 0:
+                direction = 'SELL'
+                action = 'OPEN'
+
+            # Increase exposure on a short position
+            if current_pos < 0:
+                direction = 'SELL'
+                action = 'ADD'
+            
+            # Close a long position
+            if current_pos > 0 and current_pos + net_quantity == 0:
+                direction = 'SELL'
+                action = 'CLOSE'
+
+            # Flip a long position
+            if current_pos > 0 and current_pos + net_quantity < 0:
+                direction = 'SELL'
+                action = 'NET' 
+
+
         else:
             return None
-            
-        order = OrderEvent(ticker, order_type, abs(net_quantity), direction, signal.regime)
 
+
+        order = OrderEvent(ticker, order_type, order_quantity, direction, signal.regime, action=action)
+        #order_data.append({'ticker': ticker, 'direction': direction, 'quantity': quantity})
         return order
 
 
@@ -284,7 +580,11 @@ class NaivePortfolio(Portfolio):
     def calc_max_shares(self, ticker):
         bars = self.bars.get_latest_bars(ticker, N=1)
         close_price = bars[0].close
+        print(ticker)
+        print(close_price)
+
         order_size = int(self.current_holdings['cash'] // close_price)
+
         return order_size
 
 
@@ -302,15 +602,22 @@ class NaivePortfolio(Portfolio):
             order_event = None
 
             if event.signal_type in ['LONG', 'SHORT']:
+
                 if event.use_risk_manager:
                     order_size = self.risk_manager.size_order(event)
                 else:
                     ticker = event.ticker # Used for benchmarking, where RiskManager is not used
+                    print(event.datetime)
                     order_size = self.calc_max_shares(ticker)
 
                 if order_size is not None:
+
                     target_pos = None
-                    current_pos = self.current_positions[event.ticker]
+                    current_pos = self.current_positions[event.ticker]['quantity']
+
+
+
+                    
 
                     if event.signal_type == 'LONG':
                         target_pos = current_pos if current_pos > 0 else order_size
@@ -329,21 +636,32 @@ class NaivePortfolio(Portfolio):
                             if net_quantity > 0:
                                 cash_needed = net_quantity * event.price
                                 if self.order_manager.reserve(cash_needed):
-                                    order_event = self.generate_naive_order(event, net_quantity)
+                                    order_event = self.generate_naive_order(event, net_quantity, current_pos)
                                     if self.verbose: print(f"PORT: Order submitted for {event.ticker}: {event.signal_type}")
+
+
                             else:
-                                order_event = self.generate_naive_order(event, net_quantity)
+                                order_event = self.generate_naive_order(event, net_quantity, current_pos)
                                 if self.verbose: print(f"PORT: Order submitted for {event.ticker}: {event.signal_type}")
 
+
+
+
             elif event.signal_type == 'FLAT':
-                current_pos = self.current_positions[event.ticker]
+                current_pos = self.current_positions[event.ticker]['quantity']
                 net_quantity = -current_pos
 
                 if net_quantity != 0:
-                    order_event = self.generate_naive_order(event, net_quantity)
+                    order_event = self.generate_naive_order(event, net_quantity, current_pos)
+
+
                     if self.verbose: print(f"PORT: Order submitted for {event.ticker}: {event.signal_type}")
 
+
+
             if order_event:
+
+                        
                 self.events.put(order_event)
 
 

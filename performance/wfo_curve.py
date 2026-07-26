@@ -1,6 +1,6 @@
 import plotly.graph_objects as go
 
-def display_walkforward_curve(combined_equity_curve, comb_bnh_eq):
+def display_walkforward_curve(combined_equity_curve, comb_bnh_eq, display_curve):
     """
     Reveives a combined equity curve (Pandas Series) and creates a graph.
     """
@@ -20,4 +20,5 @@ def display_walkforward_curve(combined_equity_curve, comb_bnh_eq):
     fig.update_xaxes(title_text="Time")
     fig.update_yaxes(title_text="Portfolio Value")
 
-    fig.show()
+    if display_curve == True:
+        fig.show()

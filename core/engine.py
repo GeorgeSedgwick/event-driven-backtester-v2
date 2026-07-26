@@ -1,7 +1,7 @@
 # Import relevant modules.
 from queue import Queue, Empty
-from datetime import datetime
-
+from datetime import datetime, date, timezone
+from strategies import BuyAndHoldStrategy, MomentumStrategy
 from data.datahandler import HistoricCSVDataHandler
 
 from core.portfolio import NaivePortfolio
@@ -9,6 +9,9 @@ from core.execution import SimulatedExecutionHandler
 
 from models.gaussian import GaussianMarketRegimeDetector
 
+from tqdm import tqdm
+
+from performance.dashboard import equity_data, position_data
 """
 Runs the backtest engine loop.
 
@@ -25,16 +28,27 @@ Params:
 """
 
 # Run the backtest engine.
-def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, track_dates, regime_detector=None, **kwargs):
+def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, use_stops, track_dates, market, iv_idx, regime_detector=None, **kwargs):
+    
+    equity_data.clear()
+    position_data.clear()
+    pbar = tqdm(desc='Backtesting', unit=" bars")
+
     # Instantiate the main event queue.
     events = Queue()
 
+
+
     # Instantiate the DataHandler (bars)
-    bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constituents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
+    if market == 'SPY':
+        bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/sp_constituents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
+    elif market == 'QQQ':
+        bars = HistoricCSVDataHandler(events, csv_dir='/Users/george/python-projects/ed-backtest/backtester/data/nasdaq_constituents', ticker_list=ticker_list, start_date=start_date, end_date=end_date, verbose=False)
+        
 
     # Instantiate the RegimeDetector (or accept the one passed in and reset the models DataHandler object).
     if regime_detector == None:
-        regime_detector = GaussianMarketRegimeDetector(bars, warmup_freq=252, retrain_freq=21, n_components=4)
+        regime_detector = GaussianMarketRegimeDetector(bars, warmup_freq=126, retrain_freq=21, n_components=4, market=market, iv_idx=iv_idx)
     else:
         regime_detector = regime_detector
         regime_detector.prepare_for_new_fold(bars)
@@ -43,7 +57,7 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     strategy = strategy_name(bars, events, **kwargs)
 
     # Instantiate the Portfolio object
-    port = NaivePortfolio(bars, events, start_date, initial_capital, verbose=False)
+    port = NaivePortfolio(strategy_name, bars, events, start_date, initial_capital, verbose=False)
     
     # Instantiate the ExecutionHandler object
     broker = SimulatedExecutionHandler(events, bars, verbose=False)
@@ -52,9 +66,10 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     while True:
         if bars.continue_backtest:
             bars.update_bars()
-            
+            pbar.update(1)
         # Unless bars.continue_backtest==False, then end the loop (backtest has complete).
         else:
+            pbar.close()
             break
 
         # Second loop, retrieve events from the event queue previously instantiated.
@@ -75,6 +90,9 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
 
                         # Retrieves a tuple consisting of the highest probable regime and its probability (for pos sizing).
                         regime_and_prob = regime_detector.update()
+
+                        # Check stops if enabled
+                        if strategy_name != BuyAndHoldStrategy and use_stops != False: port.risk_manager.check_stops(bars, events, regime_and_prob)
 
                         # Calculates signals from prices, uses prob of regime for degree of confidence in trade.
                         strategy.calc_signals(event, regime_and_prob)
@@ -98,6 +116,10 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     
     # Create EQ Curve DataFrame.
     port.create_equity_curve_dataframe()
+
+
+        
+    
 
     # Return PortfolioObject, and RegimeDetector object (for potential reuse).
     return port, regime_detector

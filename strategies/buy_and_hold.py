@@ -54,6 +54,6 @@ class BuyAndHoldStrategy(Strategy):
                 dt = bars[0].datetime
                 close = bars[0].close
 
-                signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=False, price=close)
+                signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=False, price=close, size=1)
                 self.events.put(signal) # Append the Queue() object with the Signal
 

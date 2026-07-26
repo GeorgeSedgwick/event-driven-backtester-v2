@@ -16,8 +16,8 @@ class MeanReversionStrategy(Strategy):
         self.use_shorts = use_shorts
         self.verbose = verbose
 
-        self.top_percentile = 200
-        self.bottom_percentile = 200
+        self.top_percentile = 225
+        self.bottom_percentile = 225
 
 
 
@@ -46,6 +46,12 @@ class MeanReversionStrategy(Strategy):
 
         top = [i[0] for i in top_tuples]
         bottom = [i[0] for i in bottom_tuples]
+
+        all_ticks = list(rankings.keys())
+        remain = [x for x in all_ticks if x not in top and x not in bottom]
+
+        print(len(remain))
+        
 
 
 

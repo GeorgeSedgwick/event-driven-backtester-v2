@@ -1,6 +1,6 @@
 
 from datetime import datetime, timezone
-from queue import Queue
+from collections import deque
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -48,7 +48,7 @@ class SimulatedExecutionHandler(ExecutionHandler):
         """
         self.events = events
         self.data_handler = data_handler
-        self.pending_orders = Queue()
+        self.pending_orders = deque()
         self.slippage_model = LogSlippageModel()
 
         self.verbose = verbose
@@ -96,18 +96,24 @@ class SimulatedExecutionHandler(ExecutionHandler):
         """
 
         if event.type == 'ORDER':
-            self.pending_orders.put(event)
+            if event.action == "STOP":
+                remove_orders = [order for order in self.pending_orders if order.ticker == event.ticker]
+                for order in remove_orders:
+                    self.pending_orders.remove(order)
+
+            
+            self.pending_orders.append(event)
 
     def execute_order(self):
         """
         Converts Order objects into Fill objects.
         """
         while True:
-            if self.pending_orders.empty():
+            if len(self.pending_orders) == 0:
                 break
             else:
 
-                event = self.pending_orders.get(False)
+                event = self.pending_orders.popleft()
                 if self.verbose: print(f"EXEC: {event.ticker} order taken from new FIFO queue, executing...")
 
                 result = self.calc_fill_cost(event.ticker, event.quantity, event.direction)
@@ -129,7 +135,8 @@ class SimulatedExecutionHandler(ExecutionHandler):
                         fill_cost, 
                         commission,
                         slippage_cost,
-                        event.regime
+                        event.regime,
+                        event.action
                     )
 
                     self.events.put(fill_event)

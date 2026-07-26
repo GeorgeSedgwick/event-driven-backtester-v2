@@ -1,86 +1,49 @@
 
-import plotly.graph_objects as go
 from datetime import datetime, timezone
 import pandas as pd
-import os
 from performance import *
 
-from core.engine import run_backtest
-from strategies import BuyAndHoldStrategy, MomentumStrategy, MeanReversionStrategy
-from utils.data_fetch import get_snp500_tickers, get_valid_tickers
+from research.spy_test import run_spy_test
+from research.nasdaq_test import run_nq_test
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
+
 def compare_to_benchmark():
-    start_date = datetime(2018, 1, 1, tzinfo=timezone.utc)
-    end_date = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
-    csv_dir = '/Users/george/python-projects/ed-backtest/backtester/data/sp_constituents'
-
-    valid_tickers = []
-    tickers = get_snp500_tickers()
-    valid_tickers = get_valid_tickers(tickers, csv_dir, start_date, end_date)
-
-    valid_tickers = [x for x in valid_tickers if x != "SPY" and x != "^VIX"]
-    valid_tickers = ["SPY"] + valid_tickers + ["^VIX"]
+    config = {
+        'strategy': 'momentum',
+        'start': datetime(2020, 1, 1, tzinfo=timezone.utc),
+        'end': datetime(2026, 7, 25, tzinfo=timezone.utc),
+        'capital': 100000,
+        'market': 'SPY'
+    }
 
 
-    bnh_port, _ = run_backtest(
-        BuyAndHoldStrategy,
-        ['SPY', '^VIX'],
-        start_date=start_date,
-        end_date=end_date,
-        initial_capital=100000,
-        track_dates=False
-        )
+    if config.get('market') == 'SPY':
+        bnh_port, strategy_port = run_spy_test(config)
 
-    """strategy_port = run_backtest(
-        MeanReversionStrategy,
-        valid_tickers,
-        start_date=start_date,
-        end_date=end_date,
-        initial_capital=100000,
-        lookback=30,
-        short_period=21,
-        long_period=63,
-        z_condition=2.0,
-        z_exit_threshold=0.5,
-        use_shorts=False,
-        track_dates=False
-        )"""
-    
-    strategy_port, regime_detector = run_backtest(
-        MomentumStrategy,
-        valid_tickers,
-        start_date=start_date,
-        end_date=end_date,
-        initial_capital=100000,
-        lookback=252,
-        rebalance=42,
-        top_n=5,
-        use_shorts=False,
-        track_dates=True
-        )
-    
+    elif config.get('market') == 'NQ':
+        bnh_port, strategy_port = run_nq_test(config)
 
 
 
 
+    display_benchmark_results(bnh_port, strategy_port, config.get('start'), config.get('end'))
+    display_benchmark_curve(bnh_port, strategy_port, display_graph=False)
 
-    display_benchmark_results(bnh_port, strategy_port)
-    display_win_loss(strategy_port)
-    display_payoff_ratio(strategy_port)
+    trades_df = get_trade_df(strategy_port)
+    print(trades_df.sort_values('entry_datetime', ascending=True))
+    print(len(trades_df))
 
-    trades = get_trade_df(strategy_port)
+    regime_df = get_regime_stats(trades_df)
+    print(regime_df)
 
-
-    print(f"PnL Sum by Regime:\n{trades.groupby('regime')['pnl'].sum()}")
-    print(f"\nMean PnL by Regime:\n{trades.groupby('regime')['pnl'].mean()}")
-
-
-
+    #store_backtest("Simple_Momentum", config.get("start"), config.get("end"), strategy_port, trades_df)
+    sql_df = read_from_database()
+    #print(sql_df)
 
 
