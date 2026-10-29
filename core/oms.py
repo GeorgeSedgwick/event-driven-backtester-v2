@@ -61,5 +61,10 @@ class BasicOrderManager(OrderManager):
 
     def release(self, cost):
         self.reserved_cash -= cost
-        if self.reserved_cash < 0:
+
+        # This is not a good fix, VERY temporary
+
+        if self.reserved_cash > 0 and self.reserved_cash < 300:
+           self.reserved_cash = 0
+        elif self.reserved_cash < 0:
             self.reserved_cash = 0

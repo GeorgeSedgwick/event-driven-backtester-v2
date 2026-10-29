@@ -6,7 +6,7 @@ from core.event import SignalEvent
 from .base import Strategy
 from statsmodels.tsa.stattools import coint
 
-class MomentumStrategy(Strategy):
+class CrossSectionalMomentumStrategy(Strategy):
     def __init__(self, bars, events, lookback, rebalance, top_n, use_shorts, verbose=False):
         self.bars = bars
         self.ticker_list = self.bars.ticker_list
@@ -18,7 +18,6 @@ class MomentumStrategy(Strategy):
         self.top_n = top_n
 
         self.days_since_rebalance = 0
-        self.short_period, self.med_period = 30, 75
 
         self.use_shorts = use_shorts
         self.verbose = verbose
@@ -42,34 +41,45 @@ class MomentumStrategy(Strategy):
 
                 if len(bars) >= self.lookback_period:
                     closes = np.array([bar.close for bar in bars])
+
+
+                    # Total momentum from lookback
                     momentum = np.log(closes[-1] / closes[0])
+
+                    # 6-month momentum
+                    mom_6 = np.log(closes[-1] / closes[self.lookback_period - 127])
+
+                    # 3-month momentum
+                    mom_3 = np.log(closes[-1] / closes[self.lookback_period - 64])
+
+                    # 1-month momentum
+                    mom_1 = np.log(closes[-1] / closes[self.lookback_period - 22])
+
+                    mom_2_week = np.log(closes[-1] / closes[self.lookback_period - 11])
+
                     
-                    
-                    
-                    #momentum_1 = momentum - np.log(closes[-1] / closes[(self.lookback_period - 22)])
-                    #momentum_2 = momentum - np.log(closes[-1] / closes[(self.lookback_period - 44)])
+
+                    composite_mom = (
+                        #0.2 * mom_3 +
+                        0.5 * mom_6 +
+                        0.5 * momentum)
 
 
-
-                    rankings[s] = momentum
+                    rankings[s] = composite_mom
         return rankings
 
 
 
 
                     
-    def calc_signals(self, event, regime_and_prob):
+    def calc_signals(self, event, regime_and_size):
 
-        if regime_and_prob == None:
+        if regime_and_size == None:
             regime = ""
-            prob = 0
             size = 0
-            #print(f"Highest probregime: {regime} | Prob: {prob}")
         else:
-            regime = regime_and_prob[0]
-            prob = regime_and_prob[1]
-            size = regime_and_prob[2]
-            if self.verbose: print(f"Highest prob regime: {regime} | Prob: {prob}")
+            regime = regime_and_size[0]
+            size = regime_and_size[1]
 
 
         if regime == "BULL": self.bull_count += 1
@@ -82,27 +92,21 @@ class MomentumStrategy(Strategy):
             if self.should_rebalance():
 
                 rankings = self.get_rankings()
-                sorted_rankings = sorted(rankings.items(), key=lambda x: x[1], reverse=True)
+                sorted_rankings = sorted(rankings.items(), key=lambda x: x[1], reverse=True) # Change to True for real momentum (False for reversals)
+
+
+
+
+
                 top = []
-                """if rankings:
-                    t_score = np.percentile(list(rankings.values()), 99)
-                    t_dict = {ticker: score for ticker, score in rankings.items() if score >= t_score}
-                    t_sorted = sorted(t_dict.items(), key=lambda x: x[1], reverse=True)
-
-                    t_list = [ticker[0] for ticker in t_sorted]
-                    print(t_list)
-                    top = t_list
-                    print(len(top))
-                    #print(len(top))"""
-
                 top_tuples = sorted_rankings[:self.top_n]
                 bottom_tuples = sorted_rankings[-self.top_n:]
 
                 top = [i[0] for i in top_tuples]
-                print(f"Regime on date {event.datetime}: {regime}")
-                print(top)
 
-                    
+                if self.verbose: print(f"Top picks: {top}")
+
+                print(f"Top Picks: {top}")
                 bottom = [i[0] for i in bottom_tuples]
 
                 for ticker in self.ticker_list:
@@ -113,25 +117,18 @@ class MomentumStrategy(Strategy):
 
                     dt = bars[0].datetime
                     close = bars[0].close
+
+
                     
                     if top != []:
 
-                        
-                        if regime == "BULL" and prob >= 0.0 and ticker in top: # and rankings[ticker] > 0.5:
-                            signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime, size=size)
-                        elif regime == "BEAR" and prob >= 0.0 and ticker in top: #and self.use_shorts==True:
-                            signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime, size=size)
-                        elif regime == "RECOVERY" and prob >= 0.0 and ticker in top: # and rankings[ticker] > 0.5:
-                            signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime, size=size)
-                        elif regime == "TRANSITION" and prob >= 0.0 and ticker in top:# and rankings[ticker] > 0.8:
+                        if ticker in top: # and rankings[ticker] > 0.5:
                             signal = SignalEvent(ticker, dt, 'LONG', use_risk_manager=True, price=close, regime=regime, size=size)
 
 
-                        elif regime == "BEAR" and prob >= 0.0 and ticker in bottom and self.use_shorts==True:
+                        elif ticker in bottom and self.use_shorts==True:
                             signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close, regime=regime, size=size)
-                        elif regime == "TRANSITION" and prob >= 0.0 and ticker in bottom and self.use_shorts==True:
-                            signal = SignalEvent(ticker, dt, 'SHORT', use_risk_manager=True, price=close, regime=regime, size=size)
-
+                            
 
                         else:
                             signal = SignalEvent(ticker, dt, "FLAT")

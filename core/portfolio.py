@@ -9,7 +9,7 @@ from math import floor
 from .event import FillEvent, OrderEvent
 from .risk import RiskManager, StatArbRiskManager
 from .oms import BasicOrderManager
-from strategies import MomentumStrategy, BuyAndHoldStrategy, StatArbStrategy
+from strategies import CrossSectionalMomentumStrategy, BuyAndHoldStrategy, StatArbStrategy
 from performance import *
 from performance.dashboard import equity_data, position_data
 
@@ -66,7 +66,7 @@ class NaivePortfolio(Portfolio):
         self.total_fills = 0
         self.start_date = start_date
         
-        self.risk_manager = RiskManager(self) if strategy == MomentumStrategy or strategy == BuyAndHoldStrategy else StatArbRiskManager(self)
+        self.risk_manager = RiskManager(self) if strategy == CrossSectionalMomentumStrategy or strategy == BuyAndHoldStrategy else StatArbRiskManager(self)
         self.order_manager = BasicOrderManager(self)
         self.trades = {}
         self.trade_ids = dict.fromkeys(self.ticker_list, None) # Temp
@@ -602,9 +602,11 @@ class NaivePortfolio(Portfolio):
             order_event = None
 
             if event.signal_type in ['LONG', 'SHORT']:
+                print(f"{event.signal_type} signal received for {event.ticker}")
 
                 if event.use_risk_manager:
                     order_size = self.risk_manager.size_order(event)
+                    print(f"Order sized for {event.ticker} | Quantity: {order_size}")
                 else:
                     ticker = event.ticker # Used for benchmarking, where RiskManager is not used
                     print(event.datetime)
@@ -620,6 +622,7 @@ class NaivePortfolio(Portfolio):
                     
 
                     if event.signal_type == 'LONG':
+                        print(f"Long signal generated for {event.ticker}")
                         target_pos = current_pos if current_pos > 0 else order_size
                         
 
@@ -635,8 +638,14 @@ class NaivePortfolio(Portfolio):
                             
                             if net_quantity > 0:
                                 cash_needed = net_quantity * event.price
+                                print(
+                                    f"ORDER | {event.ticker} | current = {current_pos} | "
+                                    f"Target = {target_pos} | net = {net_quantity}"
+                                    f"Price = {event.price:.4f} | cash_needed = {cash_needed:.2f}"
+                                )
                                 if self.order_manager.reserve(cash_needed):
                                     order_event = self.generate_naive_order(event, net_quantity, current_pos)
+                                    print(f"Order event generated in portfolio: {order_event}")
                                     if self.verbose: print(f"PORT: Order submitted for {event.ticker}: {event.signal_type}")
 
 

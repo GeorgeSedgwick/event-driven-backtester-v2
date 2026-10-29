@@ -9,7 +9,7 @@ from .event import FillEvent, OrderEvent
 from models.slippage import LogSlippageModel
 
 from random import randbytes
-
+ 
 
 class ExecutionHandler(ABC):
     # Handles interaction between a set of order objects generated

@@ -4,7 +4,7 @@ import pandas as pd
 from performance import *
 
 from core.engine import run_backtest
-from strategies import BuyAndHoldStrategy, MomentumStrategy, MeanReversionStrategy, StatArbStrategy
+from strategies import BuyAndHoldStrategy, CrossSectionalMomentumStrategy, MeanReversionStrategy, StatArbStrategy
 from utils.data_fetch import get_snp500_tickers, get_valid_tickers
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -30,26 +30,29 @@ def run_spy_test(config):
             use_stops=False,
             track_dates=False,
             market='SPY',
-            iv_idx='^VIX'
+            iv_idx='^VIX',
+            regime_model=config.get("regime_model")
             )
 
         strategy_port, regime_detector = run_backtest(
-                MomentumStrategy,
+                CrossSectionalMomentumStrategy,
                 valid_tickers,
                 start_date=config.get('start'),
                 end_date=config.get('end'),
                 initial_capital=config.get('capital'),
-                lookback=126,
+                lookback=252,
                 rebalance=10,
                 top_n=5,
                 use_shorts=False,
                 use_stops=False,
                 track_dates=False,
                 market='SPY',
-                iv_idx='^VIX'
+                iv_idx='^VIX',
+                regime_model=config.get('regime_model')
             )
         
         return bnh_port, strategy_port
+
 
     elif config.get('strategy') == 'StatArb':
 
@@ -62,7 +65,8 @@ def run_spy_test(config):
             use_stops=False,
             track_dates=False,
             market='SPY',
-            iv_idx='^VIX'
+            iv_idx='^VIX',
+            regime_model=config.get('regime_model')
             )
 
 
@@ -73,12 +77,13 @@ def run_spy_test(config):
             end_date=config.get('end'),
             initial_capital=config.get('capital'),
             lookback=252,
-            rebalance=21,
+            rebalance=10,
             n_pairs=5,
             use_stops=False,
             track_dates=False,
             market='SPY',
-            iv_idx='^VIX'
+            iv_idx='^VIX',
+            regime_model=config.get('regime_model')
         )
     
         return bnh_port, strategy_port

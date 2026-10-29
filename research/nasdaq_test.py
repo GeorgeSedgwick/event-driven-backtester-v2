@@ -3,7 +3,7 @@ import pandas as pd
 from performance import *
 
 from core.engine import run_backtest
-from strategies import BuyAndHoldStrategy, MomentumStrategy, StatArbStrategy
+from strategies import BuyAndHoldStrategy, CrossSectionalMomentumStrategy, StatArbStrategy
 from utils.data_fetch import get_nq100_tickers, get_valid_tickers
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -28,11 +28,12 @@ def run_nq_test(config):
             use_stops=False,
             track_dates=False,
             market='QQQ',
-            iv_idx='^VXN'
+            iv_idx='^VXN',
+            regime_model=config.get('regime_model')
             )
 
         strategy_port, regime_detector = run_backtest(
-                MomentumStrategy,
+                CrossSectionalMomentumStrategy,
                 valid_tickers,
                 start_date=config.get('start'),
                 end_date=config.get('end'),
@@ -44,10 +45,12 @@ def run_nq_test(config):
                 use_stops=False,
                 track_dates=False,
                 market='QQQ',
-                iv_idx='^VXN'
+                iv_idx='^VXN',
+                regime_model=config.get('regime_model')
             )
         
         return bnh_port, strategy_port
+
 
     elif config.get('strategy') == 'StatArb':
 
@@ -60,7 +63,8 @@ def run_nq_test(config):
             use_stops=False,
             track_dates=False,
             market='QQQ',
-            iv_idx='^VXN'
+            iv_idx='^VXN',
+            regime_model=config.get('regime_model')
             )
     
         
@@ -76,7 +80,8 @@ def run_nq_test(config):
             use_stops=False,
             track_dates=False,
             market='QQQ',
-            iv_idx='^VXN'
+            iv_idx='^VXN',
+            regime_model=config.get('regime_model')
         )
     
         return bnh_port, strategy_port

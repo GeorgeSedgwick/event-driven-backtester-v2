@@ -6,6 +6,8 @@ import os
 import json
 from datetime import datetime, timezone, time, timedelta
 import itertools
+import pandas_datareader.data as web
+
 
 def get_snp500_tickers():
 
@@ -33,12 +35,17 @@ def get_snp500_tickers():
         
 
 def get_nq100_tickers():
+    try:
 
-    headers = {'User-Agent': "Mozilla/5.0"}
-    url = 'https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies'
-    response = requests.get(url, headers=headers)
-    table = pd.read_html(io.StringIO(response.text))
-    tickers = table[0]['Ticker'].to_list()
+        headers = {'User-Agent': "Mozilla/5.0"}
+        url = 'https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies'
+        response = requests.get(url, headers=headers)
+        table = pd.read_html(io.StringIO(response.text))
+        tickers = table[0]['Ticker'].to_list()
+
+    except Exception as e:
+        print(f"Error collecting Nasdaq100 tickers.")
+        tickers = []
 
 
     return tickers
@@ -103,6 +110,31 @@ def match_sector_pairs(pairs):
             print("Error: Incorrect Pairing Detected.")
 
     return sector_pairs, individuals
+
+
+
+
+def get_daily_rf(start, end):
+    """
+    Fetch daily risk-free rate data as a series.
+
+    Used to calculate excess returns of strategy and the market, for regression.
+
+    """
+    rf = None
+    try:
+        ff_data = web.DataReader('F-F_Research_Data_Factors_daily', 'famafrench', start=start, end=end)
+        rf = ff_data[0]['RF'] / 100.0
+
+        rf.index = rf.index.to_timestamp()
+        rf.index = rf.index.tz_localize("UTC")
+
+    except Exception as e:
+        print("Can't access KennethFrench Library right now. Check connection and try again.")
+
+    return rf
+    
+
 
 
 

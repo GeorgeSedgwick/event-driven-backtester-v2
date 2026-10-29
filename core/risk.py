@@ -167,52 +167,86 @@ class StatArbRiskManager():
 
 
 
+"""
+<<<<<------
+STARB ABOVE
+
+
+
+
+
+
+MAIN USE RISK MANAGER BELOW: 
+
+------>>>>
+"""
+
+
+
+
 
 class RiskManager(object):
     def __init__(self, portfolio, verbose=False):
         self.portfolio = portfolio
-        self.max_portfolio_exposure = 0.1 # Sets the maximum exposure of a single trade
+        self.max_portfolio_exposure = 0.2 # Sets the maximum exposure of a single trade
         self.stops_triggered = 0
         self.stop_losses = []
         self.stop_losses_pct = []
         
 
         self.verbose = verbose
+        self.use_model = True
 
     def size_order(self, signal):
         cash = self.portfolio.current_holdings['cash']
-        available_cash = (cash - self.portfolio.order_manager.reserved_cash) * self.max_portfolio_exposure
-        if self.verbose:
-            print(f"RiskManager | Effective available cash: {available_cash}")
-
-        if signal.regime is not None:
-            if signal.regime == "BULL":
-                regime_multiplier = 1
-            elif signal.regime == "BEAR":
-                regime_multiplier = 0
-            elif signal.regime == "RECOVERY":
-                regime_multiplier = 1
-            elif signal.regime == "TRANSITION":
-                regime_multiplier = 1
-
-            order_size = int((available_cash / signal.price) * signal.size) # signal.size or regime_multiplier
-            #print(order_size)
-        else:
-            regime_multiplier = 0.0 # If No Regime, reduce exposure to 0
-            order_size = int((available_cash / signal.price) * regime_multiplier)
-
-
+        spendable_cash = cash - self.portfolio.order_manager.reserved_cash
+        available_cash = spendable_cash * self.max_portfolio_exposure
         
+        if signal.signal_type == 'LONG' and available_cash <= 0:
+            if self.verbose: print(f"Skipping LONG {signal.ticker}: no available cash.")
+            return None
+
+        #print(f"Cash: {cash:.2f}")
+        #print(f"Reserved Cash: {self.portfolio.order_manager.reserved_cash:.2f}")
+        #print(f"Cash less reserved: {cash - self.portfolio.order_manager.reserved_cash:.2f}")
+
+        if self.verbose: print(f"RiskManager | Effective available cash: {available_cash}")
+
+        if self.verbose: print(f"Position Size Multiplier: {signal.size}")
+        temp_size = 1
+
+        if signal.signal_type == 'LONG' and available_cash > 0:
+
+            # Use Regime Detector model
+            if self.use_model == True:
+                order_size = int((available_cash / signal.price) * signal.size)
+
+            # Do not use Regime Detector model
+            elif self.use_model == False:
+                order_size = int(available_cash / signal.price)
+        
+            # If no regime, kill exposure 
+            elif signal.size == None:
+                order_size = 0
+
+
+        # Carefully treat shorts to avoid over-exposure
         if signal.signal_type == "SHORT":
             order_size = order_size // 2
         
 
         return order_size if order_size >= 1 else None
+
+
+
+
+
+
     
 
     def check_stops(self, bars, events, regime_and_prob):
 
-        stop_loss = 0.2
+        stop_loss = 10000
 
         if regime_and_prob is not None:
             regime = regime_and_prob[0]
@@ -225,7 +259,7 @@ class RiskManager(object):
         tickers = list(current_tickers.keys())
         stops_hit = []
         cover_direction = None
-    
+        
 
         for ticker in tickers:
 

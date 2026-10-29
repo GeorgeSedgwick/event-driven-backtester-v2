@@ -1,13 +1,15 @@
 # Import relevant modules.
 from queue import Queue, Empty
 from datetime import datetime, date, timezone
-from strategies import BuyAndHoldStrategy, MomentumStrategy
+from strategies import BuyAndHoldStrategy, CrossSectionalMomentumStrategy
 from data.datahandler import HistoricCSVDataHandler
 
 from core.portfolio import NaivePortfolio
 from core.execution import SimulatedExecutionHandler
+from core.universe_manager import DummyUniverseManager
 
 from models.gaussian import GaussianMarketRegimeDetector
+from models.forest import ForestMarketRegimeDetector
 
 from tqdm import tqdm
 
@@ -28,7 +30,7 @@ Params:
 """
 
 # Run the backtest engine.
-def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, use_stops, track_dates, market, iv_idx, regime_detector=None, **kwargs):
+def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capital, use_stops, track_dates, market, iv_idx, regime_detector=None, regime_model=None, **kwargs):
     
     equity_data.clear()
     position_data.clear()
@@ -37,6 +39,8 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     # Instantiate the main event queue.
     events = Queue()
 
+    # Instantiate UniverseManager
+    universe_manager = DummyUniverseManager("SPX")
 
 
     # Instantiate the DataHandler (bars)
@@ -48,9 +52,11 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
 
     # Instantiate the RegimeDetector (or accept the one passed in and reset the models DataHandler object).
     if regime_detector == None:
-        regime_detector = GaussianMarketRegimeDetector(bars, warmup_freq=126, retrain_freq=21, n_components=4, market=market, iv_idx=iv_idx)
+        if regime_model == "forest":
+            regime_detector = ForestMarketRegimeDetector(bars, warmup=1008, retrain_freq=30, market=market, iv_idx=iv_idx)
+        elif regime_model == "gaussian":
+            regime_detector = GaussianMarketRegimeDetector(bars, warmup_freq=126, retrain_freq=21, n_components=4, market=market, iv_idx=iv_idx)
     else:
-        regime_detector = regime_detector
         regime_detector.prepare_for_new_fold(bars)
 
     # Instantiate the user's chosen Strategy object
@@ -61,6 +67,9 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
     
     # Instantiate the ExecutionHandler object
     broker = SimulatedExecutionHandler(events, bars, verbose=False)
+
+
+
 
     # Run loop indefinitely.
     while True:
@@ -84,18 +93,19 @@ def run_backtest(strategy_name, ticker_list, start_date, end_date, initial_capit
                     # MarketEvent object is received.
                     if event.type == 'MARKET':
                         if track_dates: print(f"============= {event.datetime} ===========")
+                        add, drop = universe_manager.update_current_members(event.datetime)
 
-                        # Execute all pending orders (stored in ExecutionHandler queue, enters at today's open (T+1)).
+                        # Execute all pending orders (stored in ExecutionHandler queue, enters at today's open (T+1)).w
                         broker.execute_order()
 
                         # Retrieves a tuple consisting of the highest probable regime and its probability (for pos sizing).
-                        regime_and_prob = regime_detector.update()
+                        regime_and_size = regime_detector.update()
 
                         # Check stops if enabled
-                        if strategy_name != BuyAndHoldStrategy and use_stops != False: port.risk_manager.check_stops(bars, events, regime_and_prob)
+                        if strategy_name != BuyAndHoldStrategy and use_stops != False: port.risk_manager.check_stops(bars, events, regime_and_size)
 
                         # Calculates signals from prices, uses prob of regime for degree of confidence in trade.
-                        strategy.calc_signals(event, regime_and_prob)
+                        strategy.calc_signals(event, regime_and_size)
 
                         # Update the timeindex.
                         port.update_timeindex(event)

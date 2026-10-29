@@ -7,6 +7,7 @@ import numpy as np
 from hmmlearn.base import ConvergenceMonitor
 import warnings
 import logging
+ 
 
 class GaussianMarketRegimeDetector():
     def __init__(self, bars, warmup_freq, retrain_freq, n_components, market, iv_idx):
@@ -31,8 +32,12 @@ class GaussianMarketRegimeDetector():
         self.iv_idx = iv_idx
 
     def get_features(self, fit_scaler):
+
         bars = self.spy_bar_history
         vix_bars = self.vix_bar_history
+
+
+
 
         # Align dates of bars.
         bar_dates = {b['date'].date(): b for b in bars}
@@ -43,8 +48,6 @@ class GaussianMarketRegimeDetector():
         bars = [bar_dates[date] for date in same_dates]
         vix_bars = [vix_dates[date] for date in same_dates]
 
-        print(bars[-1]['date'])
-        print(vix_bars[-1]['date'])
         assert bars[-1]['date'].date() == vix_bars[-1]['date'].date()
 
 
@@ -91,25 +94,6 @@ class GaussianMarketRegimeDetector():
 
         return X_new
     
-
-    def assign_prob_labels(self):
-        bull = np.argmax(self.model.means_[:, 0])
-        bear = np.argmin(self.model.means_[:, 0])
-
-        remaining = [i for i in range(self.n_components) if i != bull and i != bear]
-        transition = remaining[np.argmax(self.model.means_[remaining, 4])]
-
-        remaining.remove(transition)
-        recovery = remaining[0]
-
-        regime_labels = {
-            bull: "BULL",
-            bear: "BEAR",
-            transition: "TRANSITION",
-            recovery: "RECOVERY"
-        }
-
-        self.regime_prob_labels = regime_labels
 
     
     def assign_labels(self):
@@ -187,8 +171,7 @@ class GaussianMarketRegimeDetector():
             self.last_retrain = dt
 
             self.assign_labels()
-            self.assign_prob_labels()
-            self.label_to_state = {v: k for k, v in self.regime_prob_labels.items()}
+            self.label_to_state = {v: k for k, v in self.regime_labels.items()}
 
             posterior_probs = self.model.predict_proba(X)
             hidden_states = self.model.predict(X)
@@ -196,10 +179,10 @@ class GaussianMarketRegimeDetector():
             self.current_probs = posterior_probs[-1]
             self.current_regime = hidden_states[-1]
 
-            state_prob_tuple = self.get_highest_prob_state()
+            state_size_tuple = self.get_regime_and_size()
             
             #return self.regime_labels[self.current_regime]
-            return state_prob_tuple
+            return state_size_tuple
 
         else:
             X = self.get_features(fit_scaler=False)
@@ -210,16 +193,15 @@ class GaussianMarketRegimeDetector():
             self.current_probs = posterior_probs[-1]
             self.current_regime = hidden_states[-1]
 
-            state_prob_tuple = self.get_highest_prob_state()
+            state_prob_tuple = self.get_regime_and_size()
 
             #return self.regime_labels[self.current_regime]
             return state_prob_tuple
         
 
-    def get_highest_prob_state(self):
+    def get_regime_and_size(self):
         highest_prob_index = np.argmax(self.current_probs)
         highest_prob_state = self.regime_labels[highest_prob_index]
-        prob = np.max(self.current_probs)
 
         transition_prob = self.current_probs[self.label_to_state['TRANSITION']]
         bull_prob = self.current_probs[self.label_to_state['BULL']]
@@ -240,7 +222,7 @@ class GaussianMarketRegimeDetector():
             #print("Enough confidence to trade.")
 
         np.set_printoptions(suppress=True, precision=4)
-        return (highest_prob_state, prob, position_size)
+        return (highest_prob_state, position_size)
     
 
     def prepare_for_new_fold(self, bars):
